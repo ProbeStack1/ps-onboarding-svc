@@ -1,0 +1,578 @@
+{
+  "info": {
+    "name": "ProbeStack Onboarding Service",
+    "description": "Postman collection for ps-onboarding-svc. Uses header-based organization and actor identity. Run the create requests in this order for the happy path: Consumer, Business Unit, Project, Application.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8084/onboarding-api" },
+    { "key": "organizationId", "value": "org-demo-001" },
+    { "key": "userId", "value": "user-demo-001" },
+    { "key": "userEmail", "value": "admin@probestack.io" },
+    { "key": "userName", "value": "ProbeStack Admin" },
+    { "key": "userRole", "value": "ADMIN" },
+    { "key": "businessUnitId", "value": "" },
+    { "key": "projectId", "value": "" },
+    { "key": "applicationId", "value": "" },
+    { "key": "consumerId", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Response is JSON', function () {",
+          "  pm.response.to.have.header('Content-Type');",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/actuator/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Business Units",
+      "item": [
+        {
+          "name": "Create Business Unit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Business unit created', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('businessUnitId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Wealth Management\",\n  \"code\": \"WEALTH\",\n  \"ownerName\": \"Jagruti\",\n  \"ownerEmail\": \"owner@example.com\",\n  \"costCenter\": \"CC-1001\",\n  \"description\": \"Owns wealth domain onboarding.\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/onboarding/business-units"
+          }
+        },
+        {
+          "name": "List Business Units",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/onboarding/business-units?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "onboarding", "business-units"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "search", "value": "", "disabled": true },
+                { "key": "status", "value": "ACTIVE", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Business Unit",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/business-units/{{businessUnitId}}"
+          }
+        },
+        {
+          "name": "Update Business Unit",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"description\": \"Updated business unit description.\",\n  \"status\": \"ACTIVE\"\n}" },
+            "url": "{{baseUrl}}/api/v1/onboarding/business-units/{{businessUnitId}}"
+          }
+        },
+        {
+          "name": "Business Unit Tree",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/business-units/{{businessUnitId}}/tree"
+          }
+        },
+        {
+          "name": "Business Unit History",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/business-units/{{businessUnitId}}/history"
+          }
+        },
+        {
+          "name": "Delete Business Unit",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/onboarding/business-units/{{businessUnitId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "Create Project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Project created', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('projectId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessUnitId\": \"{{businessUnitId}}\",\n  \"name\": \"Inventory Modernization\",\n  \"code\": \"INV-MOD\",\n  \"ownerName\": \"Jagruti\",\n  \"ownerEmail\": \"owner@example.com\",\n  \"projectDlEmail\": \"project-dl@example.com\",\n  \"expectedGoLiveDate\": \"2026-08-15\",\n  \"deliveryModel\": \"Agile\",\n  \"status\": \"READY\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/onboarding/projects"
+          }
+        },
+        {
+          "name": "List Projects",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/onboarding/projects?businessUnitId={{businessUnitId}}&page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "onboarding", "projects"],
+              "query": [
+                { "key": "businessUnitId", "value": "{{businessUnitId}}" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "status", "value": "READY", "disabled": true },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Project",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/projects/{{projectId}}"
+          }
+        },
+        {
+          "name": "Update Project",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"deliveryModel\": \"Agile delivery\",\n  \"status\": \"READY\"\n}" },
+            "url": "{{baseUrl}}/api/v1/onboarding/projects/{{projectId}}"
+          }
+        },
+        {
+          "name": "Project Applications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/projects/{{projectId}}/applications"
+          }
+        },
+        {
+          "name": "Project History",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/projects/{{projectId}}/history"
+          }
+        },
+        {
+          "name": "Delete Project",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/onboarding/projects/{{projectId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Applications",
+      "item": [
+        {
+          "name": "Create Application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Application created', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('applicationId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessUnitId\": \"{{businessUnitId}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"name\": \"InventoryTeam\",\n  \"applicationId\": \"APP-2026-001\",\n  \"ownerName\": \"Jagruti\",\n  \"ownerEmail\": \"owner@example.com\",\n  \"applicationSme\": \"Inventory SME\",\n  \"smeEmail\": \"sme@example.com\",\n  \"testerName\": \"QA User\",\n  \"testerEmail\": \"tester@example.com\",\n  \"serviceNowGroupName\": \"SN-Inventory\",\n  \"serviceNowEmail\": \"servicenow@example.com\",\n  \"status\": \"DRAFT\",\n  \"consumerIds\": [\"{{consumerId}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/onboarding/applications"
+          }
+        },
+        {
+          "name": "List Applications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/onboarding/applications?projectId={{projectId}}&page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "onboarding", "applications"],
+              "query": [
+                { "key": "projectId", "value": "{{projectId}}" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "businessUnitId", "value": "{{businessUnitId}}", "disabled": true },
+                { "key": "status", "value": "ACTIVE", "disabled": true },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Application",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/applications/{{applicationId}}"
+          }
+        },
+        {
+          "name": "Update Application",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"ACTIVE\",\n  \"consumerIds\": [\"{{consumerId}}\"]\n}" },
+            "url": "{{baseUrl}}/api/v1/onboarding/applications/{{applicationId}}"
+          }
+        },
+        {
+          "name": "Replace Application Consumers",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"consumerIds\": [\"{{consumerId}}\"]\n}" },
+            "url": "{{baseUrl}}/api/v1/onboarding/applications/{{applicationId}}/consumers"
+          }
+        },
+        {
+          "name": "Application History",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/applications/{{applicationId}}/history"
+          }
+        },
+        {
+          "name": "Delete Application",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/onboarding/applications/{{applicationId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consumers",
+      "item": [
+        {
+          "name": "Create Consumer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Consumer created', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('consumerId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Corp\",\n  \"pocName\": \"Bob Wilson\",\n  \"pocEmail\": \"poc@example.com\",\n  \"smeName\": \"Alice Brown\",\n  \"smeEmail\": \"sme@example.com\",\n  \"consumerConfig\": \"{\\\"tier\\\":\\\"gold\\\"}\",\n  \"apiTps\": 1000,\n  \"quotaRequestsPerDay\": 10000,\n  \"rateLimitRequestsPerMinute\": 100,\n  \"apiKeyInformation\": \"API Key xyz123\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/onboarding/consumers"
+          }
+        },
+        {
+          "name": "List Consumers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/onboarding/consumers?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "onboarding", "consumers"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "search", "value": "", "disabled": true },
+                { "key": "status", "value": "ACTIVE", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Consumer",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/consumers/{{consumerId}}"
+          }
+        },
+        {
+          "name": "Update Consumer",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"quotaRequestsPerDay\": 25000,\n  \"rateLimitRequestsPerMinute\": 250\n}" },
+            "url": "{{baseUrl}}/api/v1/onboarding/consumers/{{consumerId}}"
+          }
+        },
+        {
+          "name": "Consumer History",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/consumers/{{consumerId}}/history"
+          }
+        },
+        {
+          "name": "Delete Consumer",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "X-User-Id", "value": "{{userId}}" },
+              { "key": "X-User-Email", "value": "{{userEmail}}" },
+              { "key": "X-User-Name", "value": "{{userName}}" },
+              { "key": "X-User-Role", "value": "{{userRole}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/onboarding/consumers/{{consumerId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard and Selectors",
+      "item": [
+        {
+          "name": "Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/dashboard/summary"
+          }
+        },
+        {
+          "name": "Dashboard Hierarchy",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/dashboard/hierarchy?page=0&size=20"
+          }
+        },
+        {
+          "name": "Business Unit Selector",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/selectors/business-units?status=ACTIVE"
+          }
+        },
+        {
+          "name": "Project Selector By BU",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/selectors/projects?businessUnitId={{businessUnitId}}&status=READY"
+          }
+        },
+        {
+          "name": "Consumer Selector",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/selectors/consumers?page=0&size=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit",
+      "item": [
+        {
+          "name": "All Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/audit"
+          }
+        },
+        {
+          "name": "Business Unit Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/audit?resourceType=BUSINESS_UNIT&resourceId={{businessUnitId}}"
+          }
+        },
+        {
+          "name": "Project Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/audit?resourceType=PROJECT&resourceId={{projectId}}"
+          }
+        },
+        {
+          "name": "Application Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/audit?resourceType=APPLICATION&resourceId={{applicationId}}"
+          }
+        },
+        {
+          "name": "Consumer Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Organization-Id", "value": "{{organizationId}}" }],
+            "url": "{{baseUrl}}/api/v1/onboarding/audit?resourceType=CONSUMER&resourceId={{consumerId}}"
+          }
+        }
+      ]
+    }
+  ]
+}

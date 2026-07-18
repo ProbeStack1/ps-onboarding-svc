@@ -1,0 +1,31 @@
+server:
+  port: 8084
+  servlet:
+    context-path: /onboarding-api
+
+spring:
+  application:
+    name: ps-onboarding-svc
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/probestack}
+      database: ${MONGODB_DATABASE:probestack}
+      auto-index-creation: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    io.probestack: DEBUG
+    org.springframework.data.mongodb: INFO
+onboarding:
+  access:
+    org-admin-emails: ${ONBOARDING_ORG_ADMIN_EMAILS:}
+
