@@ -2,6 +2,7 @@ package io.probestack.onboarding.service;
 
 import io.probestack.onboarding.dto.access.*;
 import io.probestack.onboarding.exception.DuplicateResourceException;
+import io.probestack.onboarding.exception.InvalidStatusTransitionException;
 import io.probestack.onboarding.exception.ResourceNotFoundException;
 import io.probestack.onboarding.model.*;
 import io.probestack.onboarding.repository.*;
@@ -102,6 +103,8 @@ public class AccessManagementService {
 
     public ApplicationInvitationResponse acceptInvitation(String organizationId, String id, ActorResolver.Actor actor) {
         ApplicationInvitation invitation = findInvitation(organizationId, id);
+        requirePending(invitation.getStatus());
+        requireInvitee(invitation.getInvitedEmail(), actor);
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation.setAcceptedByEmail(actor.email());
         invitation.setAcceptedAt(Instant.now());
@@ -112,6 +115,8 @@ public class AccessManagementService {
 
     public ApplicationInvitationResponse rejectInvitation(String organizationId, String id, ActorResolver.Actor actor) {
         ApplicationInvitation invitation = findInvitation(organizationId, id);
+        requirePending(invitation.getStatus());
+        requireInvitee(invitation.getInvitedEmail(), actor);
         invitation.setStatus(InvitationStatus.REJECTED);
         invitation.setRejectedByEmail(actor.email());
         invitation.setRejectedAt(Instant.now());
@@ -122,7 +127,10 @@ public class AccessManagementService {
 
     public ApplicationInvitationResponse revokeInvitation(String organizationId, String id, ActorResolver.Actor actor) {
         ApplicationInvitation invitation = findInvitation(organizationId, id);
-        accessControlService.requireApplicationManage(organizationId, invitation.getApplicationId(), actor);
+        requirePending(invitation.getStatus());
+        if (!isCreator(invitation.getCreatedByEmail(), actor)) {
+            accessControlService.requireApplicationManage(organizationId, invitation.getApplicationId(), actor);
+        }
         invitation.setStatus(InvitationStatus.REVOKED);
         invitation.setRevokedByEmail(actor.email());
         invitation.setRevokedAt(Instant.now());
@@ -247,6 +255,8 @@ public class AccessManagementService {
 
     public TeamInvitationResponse acceptTeamInvitation(String organizationId, String id, ActorResolver.Actor actor) {
         TeamInvitation invitation = findTeamInvitation(organizationId, id);
+        requirePending(invitation.getStatus());
+        requireInvitee(invitation.getInvitedEmail(), actor);
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation.setAcceptedByEmail(actor.email());
         invitation.setAcceptedAt(Instant.now());
@@ -257,6 +267,8 @@ public class AccessManagementService {
 
     public TeamInvitationResponse rejectTeamInvitation(String organizationId, String id, ActorResolver.Actor actor) {
         TeamInvitation invitation = findTeamInvitation(organizationId, id);
+        requirePending(invitation.getStatus());
+        requireInvitee(invitation.getInvitedEmail(), actor);
         invitation.setStatus(InvitationStatus.REJECTED);
         invitation.setRejectedByEmail(actor.email());
         invitation.setRejectedAt(Instant.now());
@@ -267,9 +279,10 @@ public class AccessManagementService {
 
     public TeamInvitationResponse revokeTeamInvitation(String organizationId, String id, ActorResolver.Actor actor) {
         TeamInvitation invitation = findTeamInvitation(organizationId, id);
+        requirePending(invitation.getStatus());
         AccessTeam team = findTeam(organizationId, invitation.getTeamId());
         var access = accessControlService.effectiveAccess(organizationId, actor);
-        if (!access.orgAdmin && !canManageTeam(access, team, actor.email())) {
+        if (!isCreator(invitation.getCreatedByEmail(), actor) && !access.orgAdmin && !canManageTeam(access, team, actor.email())) {
             throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
         }
         invitation.setStatus(InvitationStatus.REVOKED);
@@ -321,6 +334,22 @@ public class AccessManagementService {
                 .active(assignment.isActive())
                 .createdAt(assignment.getCreatedAt())
                 .build();
+    }
+
+    private void requireInvitee(String invitedEmail, ActorResolver.Actor actor) {
+        if (!StringUtils.hasText(actor.email()) || !actor.email().equalsIgnoreCase(nullToEmpty(invitedEmail))) {
+            throw new io.probestack.onboarding.exception.ForbiddenOperationException("Only the invited user can accept or reject this invitation");
+        }
+    }
+
+    private void requirePending(InvitationStatus status) {
+        if (status != InvitationStatus.PENDING) {
+            throw new InvalidStatusTransitionException("Only pending invitations can be updated");
+        }
+    }
+
+    private boolean isCreator(String createdByEmail, ActorResolver.Actor actor) {
+        return StringUtils.hasText(actor.email()) && actor.email().equalsIgnoreCase(nullToEmpty(createdByEmail));
     }
 
     private ApplicationInvitationResponse toInvitationResponse(ApplicationInvitation invitation, OnboardingApplication app) {
