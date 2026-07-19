@@ -59,7 +59,7 @@ public class AccessControlService {
         List<OnboardingProject> projects = projectRepository.findByOrganizationIdAndDeletedAtIsNullOrderByUpdatedAtDesc(organizationId);
         List<OnboardingApplication> applications = applicationRepository.findByOrganizationIdAndDeletedAtIsNullOrderByUpdatedAtDesc(organizationId);
         EffectiveAccess access = new EffectiveAccess(organizationId, email);
-        if (bootstrapOrgAdminEmails.contains(email)) {
+        if (bootstrapOrgAdminEmails.contains(email) || isOrgAdminActor(actor)) {
             access.orgAdmin = true;
         }
 
@@ -261,6 +261,10 @@ public class AccessControlService {
 
     private boolean emailEquals(String left, String right) {
         return StringUtils.hasText(left) && left.equals(normalizeEmail(right));
+    }
+
+    private boolean isOrgAdminActor(ActorResolver.Actor actor) {
+        return actor != null && "ORG_ADMIN".equalsIgnoreCase(actor.role());
     }
 
     private String normalizeEmail(String email) {
