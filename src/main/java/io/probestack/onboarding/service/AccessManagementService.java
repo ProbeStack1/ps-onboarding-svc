@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class AccessManagementService {
@@ -73,6 +75,7 @@ public class AccessManagementService {
                 .invitedName(SlugNormalizer.trimToNull(request.getInvitedName()))
                 .message(SlugNormalizer.trimToNull(request.getMessage()))
                 .role(AccessRole.APPLICATION_MEMBER)
+                .toolRoleGrants(toToolRoleGrants(request.getToolRoleGrants()))
                 .status(InvitationStatus.PENDING)
                 .createdBy(actor.name())
                 .createdByEmail(actor.email())
@@ -214,6 +217,7 @@ public class AccessManagementService {
                 .teamId(teamId)
                 .invitedEmail(normalizeEmail(request.getInvitedEmail()))
                 .invitedName(SlugNormalizer.trimToNull(request.getInvitedName()))
+                .toolRoleGrants(toToolRoleGrants(request.getToolRoleGrants()))
                 .status(InvitationStatus.PENDING)
                 .createdBy(actor.name())
                 .createdByEmail(actor.email())
@@ -327,6 +331,7 @@ public class AccessManagementService {
                 .invitedEmail(invitation.getInvitedEmail())
                 .invitedName(invitation.getInvitedName())
                 .role(invitation.getRole())
+                .toolRoleGrants(toToolRoleGrantResponses(invitation.getToolRoleGrants()))
                 .status(invitation.getStatus())
                 .message(invitation.getMessage())
                 .createdByEmail(invitation.getCreatedByEmail())
@@ -364,6 +369,7 @@ public class AccessManagementService {
                 .teamName(team == null ? null : team.getName())
                 .invitedEmail(invitation.getInvitedEmail())
                 .invitedName(invitation.getInvitedName())
+                .toolRoleGrants(toToolRoleGrantResponses(invitation.getToolRoleGrants()))
                 .status(invitation.getStatus())
                 .createdByEmail(invitation.getCreatedByEmail())
                 .acceptedByEmail(invitation.getAcceptedByEmail())
@@ -420,6 +426,46 @@ public class AccessManagementService {
 
     private String normalizeEmail(String email) {
         return email == null ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private List<ToolRoleGrant> toToolRoleGrants(List<ToolRoleGrantRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new IllegalArgumentException("At least one tool and role grant is required");
+        }
+
+        Set<String> toolKeys = new LinkedHashSet<>();
+        return requests.stream().map(request -> {
+            String toolKey = SlugNormalizer.trimToNull(request.getToolKey());
+            String toolName = SlugNormalizer.trimToNull(request.getToolName());
+            String role = SlugNormalizer.trimToNull(request.getRole());
+
+            if (!StringUtils.hasText(toolKey) || !StringUtils.hasText(toolName) || !StringUtils.hasText(role)) {
+                throw new IllegalArgumentException("Tool key, tool name, and role are required for every grant");
+            }
+            String normalizedToolKey = toolKey.toLowerCase(java.util.Locale.ROOT);
+            if (!toolKeys.add(normalizedToolKey)) {
+                throw new IllegalArgumentException("Each tool can be granted only once per invitation");
+            }
+
+            return ToolRoleGrant.builder()
+                    .toolKey(normalizedToolKey)
+                    .toolName(toolName)
+                    .role(role)
+                    .build();
+        }).toList();
+    }
+
+    private List<ToolRoleGrantResponse> toToolRoleGrantResponses(List<ToolRoleGrant> grants) {
+        if (grants == null) {
+            return List.of();
+        }
+        return grants.stream()
+                .map(grant -> ToolRoleGrantResponse.builder()
+                        .toolKey(grant.getToolKey())
+                        .toolName(grant.getToolName())
+                        .role(grant.getRole())
+                        .build())
+                .toList();
     }
 
     private String nullToEmpty(String value) {

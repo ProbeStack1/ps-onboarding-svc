@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 
 @Data
 @Builder
@@ -20,6 +21,7 @@ public class ApplicationInvitationResponse {
     private String invitedEmail;
     private String invitedName;
     private AccessRole role;
+    private List<ToolRoleGrantResponse> toolRoleGrants;
     private InvitationStatus status;
     private String message;
     private String createdByEmail;

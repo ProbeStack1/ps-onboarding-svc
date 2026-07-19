@@ -2,10 +2,13 @@ package io.probestack.onboarding.dto.access;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.List;
 
 @Data
 @Builder
@@ -17,4 +20,6 @@ public class ApplicationInvitationCreateRequest {
     private String invitedEmail;
     private String invitedName;
     private String message;
+    @Valid
+    private List<ToolRoleGrantRequest> toolRoleGrants;
 }

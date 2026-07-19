@@ -12,6 +12,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
+import java.util.List;
 
 @Data
 @Builder
@@ -30,6 +31,7 @@ public class TeamInvitation {
     private String teamId;
     private String invitedEmail;
     private String invitedName;
+    private List<ToolRoleGrant> toolRoleGrants;
     @Builder.Default
     private InvitationStatus status = InvitationStatus.PENDING;
     private String createdBy;
