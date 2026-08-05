@@ -15,6 +15,7 @@ import io.probestack.onboarding.model.BusinessUnitStatus;
 import io.probestack.onboarding.model.OnboardingApplication;
 import io.probestack.onboarding.model.OnboardingProject;
 import io.probestack.onboarding.model.ProjectStatus;
+import io.probestack.onboarding.model.ProjectEnvironment;
 import io.probestack.onboarding.model.ResourceType;
 import io.probestack.onboarding.repository.ApplicationConsumerLinkRepository;
 import io.probestack.onboarding.repository.ApplicationRepository;
@@ -26,8 +27,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class ProjectService {
@@ -64,11 +69,39 @@ public class ProjectService {
                 .businessUnitId(businessUnit.getId())
                 .name(request.getName().trim())
                 .code(code)
+                .description(SlugNormalizer.trimToNull(request.getDescription()))
+                .projectType(SlugNormalizer.trimToNull(request.getProjectType()))
+                .portfolio(SlugNormalizer.trimToNull(request.getPortfolio()))
                 .ownerName(SlugNormalizer.trimToNull(request.getOwnerName()))
                 .ownerEmail(SlugNormalizer.trimToNull(request.getOwnerEmail()))
                 .projectDlEmail(SlugNormalizer.trimToNull(request.getProjectDlEmail()))
+                .projectManagerId(SlugNormalizer.trimToNull(request.getProjectManagerId()))
+                .productManagerId(SlugNormalizer.trimToNull(request.getProductManagerId()))
+                .scrumMasterId(SlugNormalizer.trimToNull(request.getScrumMasterId()))
+                .technicalLeadId(SlugNormalizer.trimToNull(request.getTechnicalLeadId()))
+                .securityLeadId(SlugNormalizer.trimToNull(request.getSecurityLeadId()))
+                .devopsLeadId(SlugNormalizer.trimToNull(request.getDevopsLeadId()))
                 .expectedGoLiveDate(request.getExpectedGoLiveDate())
                 .deliveryModel(SlugNormalizer.trimToNull(request.getDeliveryModel()))
+                .methodology(SlugNormalizer.trimToNull(request.getMethodology()))
+                .sprintDuration(SlugNormalizer.trimToNull(request.getSprintDuration()))
+                .repository(SlugNormalizer.trimToNull(request.getRepository()))
+                .cicdTool(SlugNormalizer.trimToNull(request.getCicdTool()))
+                .issueTracker(SlugNormalizer.trimToNull(request.getIssueTracker()))
+                .documentationUrl(SlugNormalizer.trimToNull(request.getDocumentationUrl()))
+                .authenticationMethod(SlugNormalizer.trimToNull(request.getAuthenticationMethod()))
+                .authorizationMethod(SlugNormalizer.trimToNull(request.getAuthorizationMethod()))
+                .oauthProvider(SlugNormalizer.trimToNull(request.getOauthProvider()))
+                .mtlsEnabled(request.isMtlsEnabled())
+                .jwtEnabled(request.isJwtEnabled())
+                .apiKeyEnabled(request.isApiKeyEnabled())
+                .secretsVault(SlugNormalizer.trimToNull(request.getSecretsVault()))
+                .environments(normalizeEnvironments(request.getEnvironments()))
+                .pciApplicable(request.isPciApplicable())
+                .standardRules(SlugNormalizer.trimToNull(request.getStandardRules()))
+                .customRules(SlugNormalizer.trimToNull(request.getCustomRules()))
+                .owaspTop10Enabled(request.isOwaspTop10Enabled())
+                .lintingEnabled(request.isLintingEnabled())
                 .status(request.getStatus() == null ? ProjectStatus.READY : request.getStatus())
                 .createdBy(actor.name())
                 .createdByEmail(actor.email())
@@ -108,24 +141,55 @@ public class ProjectService {
         accessControlService.requireProjectManage(organizationId, id, actor);
         OnboardingProject project = find(organizationId, id);
         Map<String, Object> before = projectFields(project);
-        if (StringUtils.hasText(request.getBusinessUnitId()) && !request.getBusinessUnitId().equals(project.getBusinessUnitId())) {
+        String originalBusinessUnitId = project.getBusinessUnitId();
+        if (StringUtils.hasText(request.getBusinessUnitId()) && !request.getBusinessUnitId().equals(originalBusinessUnitId)) {
             BusinessUnit businessUnit = businessUnitService.find(organizationId, request.getBusinessUnitId());
+            accessControlService.requireBusinessUnitManage(organizationId, businessUnit.getId(), actor);
             requireActiveBusinessUnit(businessUnit);
             project.setBusinessUnitId(businessUnit.getId());
         }
+        String nextCode = StringUtils.hasText(request.getCode()) ? SlugNormalizer.normalizeCode(request.getCode()) : project.getCode();
+        if ((!project.getBusinessUnitId().equals(originalBusinessUnitId) || !nextCode.equals(project.getCode()))
+                && projectRepository.existsByOrganizationIdAndBusinessUnitIdAndCode(organizationId, project.getBusinessUnitId(), nextCode)) {
+            throw new DuplicateResourceException("Project code already exists under this business unit: " + nextCode);
+        }
         if (StringUtils.hasText(request.getCode())) {
-            String code = SlugNormalizer.normalizeCode(request.getCode());
-            if (!code.equals(project.getCode()) && projectRepository.existsByOrganizationIdAndBusinessUnitIdAndCode(organizationId, project.getBusinessUnitId(), code)) {
-                throw new DuplicateResourceException("Project code already exists under this business unit: " + code);
-            }
-            project.setCode(code);
+            project.setCode(nextCode);
         }
         if (StringUtils.hasText(request.getName())) project.setName(request.getName().trim());
+        if (request.getDescription() != null) project.setDescription(SlugNormalizer.trimToNull(request.getDescription()));
+        if (request.getProjectType() != null) project.setProjectType(SlugNormalizer.trimToNull(request.getProjectType()));
+        if (request.getPortfolio() != null) project.setPortfolio(SlugNormalizer.trimToNull(request.getPortfolio()));
         if (request.getOwnerName() != null) project.setOwnerName(SlugNormalizer.trimToNull(request.getOwnerName()));
         if (request.getOwnerEmail() != null) project.setOwnerEmail(SlugNormalizer.trimToNull(request.getOwnerEmail()));
         if (request.getProjectDlEmail() != null) project.setProjectDlEmail(SlugNormalizer.trimToNull(request.getProjectDlEmail()));
+        if (request.getProjectManagerId() != null) project.setProjectManagerId(SlugNormalizer.trimToNull(request.getProjectManagerId()));
+        if (request.getProductManagerId() != null) project.setProductManagerId(SlugNormalizer.trimToNull(request.getProductManagerId()));
+        if (request.getScrumMasterId() != null) project.setScrumMasterId(SlugNormalizer.trimToNull(request.getScrumMasterId()));
+        if (request.getTechnicalLeadId() != null) project.setTechnicalLeadId(SlugNormalizer.trimToNull(request.getTechnicalLeadId()));
+        if (request.getSecurityLeadId() != null) project.setSecurityLeadId(SlugNormalizer.trimToNull(request.getSecurityLeadId()));
+        if (request.getDevopsLeadId() != null) project.setDevopsLeadId(SlugNormalizer.trimToNull(request.getDevopsLeadId()));
         if (request.getExpectedGoLiveDate() != null) project.setExpectedGoLiveDate(request.getExpectedGoLiveDate());
         if (request.getDeliveryModel() != null) project.setDeliveryModel(SlugNormalizer.trimToNull(request.getDeliveryModel()));
+        if (request.getMethodology() != null) project.setMethodology(SlugNormalizer.trimToNull(request.getMethodology()));
+        if (request.getSprintDuration() != null) project.setSprintDuration(SlugNormalizer.trimToNull(request.getSprintDuration()));
+        if (request.getRepository() != null) project.setRepository(SlugNormalizer.trimToNull(request.getRepository()));
+        if (request.getCicdTool() != null) project.setCicdTool(SlugNormalizer.trimToNull(request.getCicdTool()));
+        if (request.getIssueTracker() != null) project.setIssueTracker(SlugNormalizer.trimToNull(request.getIssueTracker()));
+        if (request.getDocumentationUrl() != null) project.setDocumentationUrl(SlugNormalizer.trimToNull(request.getDocumentationUrl()));
+        if (request.getAuthenticationMethod() != null) project.setAuthenticationMethod(SlugNormalizer.trimToNull(request.getAuthenticationMethod()));
+        if (request.getAuthorizationMethod() != null) project.setAuthorizationMethod(SlugNormalizer.trimToNull(request.getAuthorizationMethod()));
+        if (request.getOauthProvider() != null) project.setOauthProvider(SlugNormalizer.trimToNull(request.getOauthProvider()));
+        if (request.getMtlsEnabled() != null) project.setMtlsEnabled(request.getMtlsEnabled());
+        if (request.getJwtEnabled() != null) project.setJwtEnabled(request.getJwtEnabled());
+        if (request.getApiKeyEnabled() != null) project.setApiKeyEnabled(request.getApiKeyEnabled());
+        if (request.getSecretsVault() != null) project.setSecretsVault(SlugNormalizer.trimToNull(request.getSecretsVault()));
+        if (request.getEnvironments() != null) project.setEnvironments(normalizeEnvironments(request.getEnvironments()));
+        if (request.getPciApplicable() != null) project.setPciApplicable(request.getPciApplicable());
+        if (request.getStandardRules() != null) project.setStandardRules(SlugNormalizer.trimToNull(request.getStandardRules()));
+        if (request.getCustomRules() != null) project.setCustomRules(SlugNormalizer.trimToNull(request.getCustomRules()));
+        if (request.getOwaspTop10Enabled() != null) project.setOwaspTop10Enabled(request.getOwaspTop10Enabled());
+        if (request.getLintingEnabled() != null) project.setLintingEnabled(request.getLintingEnabled());
         if (request.getStatus() != null) project.setStatus(request.getStatus());
         project.setUpdatedBy(actor.name());
         project.setUpdatedByEmail(actor.email());
@@ -169,11 +233,39 @@ public class ProjectService {
                 .businessUnitName(businessUnitName)
                 .name(project.getName())
                 .code(project.getCode())
+                .description(project.getDescription())
+                .projectType(project.getProjectType())
+                .portfolio(project.getPortfolio())
                 .ownerName(project.getOwnerName())
                 .ownerEmail(project.getOwnerEmail())
                 .projectDlEmail(project.getProjectDlEmail())
+                .projectManagerId(project.getProjectManagerId())
+                .productManagerId(project.getProductManagerId())
+                .scrumMasterId(project.getScrumMasterId())
+                .technicalLeadId(project.getTechnicalLeadId())
+                .securityLeadId(project.getSecurityLeadId())
+                .devopsLeadId(project.getDevopsLeadId())
                 .expectedGoLiveDate(project.getExpectedGoLiveDate())
                 .deliveryModel(project.getDeliveryModel())
+                .methodology(project.getMethodology())
+                .sprintDuration(project.getSprintDuration())
+                .repository(project.getRepository())
+                .cicdTool(project.getCicdTool())
+                .issueTracker(project.getIssueTracker())
+                .documentationUrl(project.getDocumentationUrl())
+                .authenticationMethod(project.getAuthenticationMethod())
+                .authorizationMethod(project.getAuthorizationMethod())
+                .oauthProvider(project.getOauthProvider())
+                .mtlsEnabled(project.isMtlsEnabled())
+                .jwtEnabled(project.isJwtEnabled())
+                .apiKeyEnabled(project.isApiKeyEnabled())
+                .secretsVault(project.getSecretsVault())
+                .environments(project.getEnvironments() == null ? List.of() : project.getEnvironments())
+                .pciApplicable(project.isPciApplicable())
+                .standardRules(project.getStandardRules())
+                .customRules(project.getCustomRules())
+                .owaspTop10Enabled(project.isOwaspTop10Enabled())
+                .lintingEnabled(project.isLintingEnabled())
                 .status(project.getStatus())
                 .applicationCount(applicationRepository.countByOrganizationIdAndProjectIdAndDeletedAtIsNull(project.getOrganizationId(), project.getId()))
                 .createdBy(project.getCreatedBy())
@@ -216,20 +308,64 @@ public class ProjectService {
     }
 
     private Map<String, Object> projectFields(OnboardingProject project) {
-        return Map.of(
-                "businessUnitId", nullToEmpty(project.getBusinessUnitId()),
-                "name", nullToEmpty(project.getName()),
-                "code", nullToEmpty(project.getCode()),
-                "ownerName", nullToEmpty(project.getOwnerName()),
-                "ownerEmail", nullToEmpty(project.getOwnerEmail()),
-                "projectDlEmail", nullToEmpty(project.getProjectDlEmail()),
-                "expectedGoLiveDate", project.getExpectedGoLiveDate() == null ? "" : project.getExpectedGoLiveDate().toString(),
-                "deliveryModel", nullToEmpty(project.getDeliveryModel()),
-                "status", project.getStatus()
-        );
+        Map<String, Object> fields = new HashMap<>();
+        fields.put("businessUnitId", value(project.getBusinessUnitId()));
+        fields.put("name", value(project.getName()));
+        fields.put("code", value(project.getCode()));
+        fields.put("description", value(project.getDescription()));
+        fields.put("projectType", value(project.getProjectType()));
+        fields.put("portfolio", value(project.getPortfolio()));
+        fields.put("ownerName", value(project.getOwnerName()));
+        fields.put("ownerEmail", value(project.getOwnerEmail()));
+        fields.put("projectDlEmail", value(project.getProjectDlEmail()));
+        fields.put("projectManagerId", value(project.getProjectManagerId()));
+        fields.put("productManagerId", value(project.getProductManagerId()));
+        fields.put("scrumMasterId", value(project.getScrumMasterId()));
+        fields.put("technicalLeadId", value(project.getTechnicalLeadId()));
+        fields.put("securityLeadId", value(project.getSecurityLeadId()));
+        fields.put("devopsLeadId", value(project.getDevopsLeadId()));
+        fields.put("expectedGoLiveDate", value(project.getExpectedGoLiveDate()));
+        fields.put("deliveryModel", value(project.getDeliveryModel()));
+        fields.put("methodology", value(project.getMethodology()));
+        fields.put("sprintDuration", value(project.getSprintDuration()));
+        fields.put("repository", value(project.getRepository()));
+        fields.put("cicdTool", value(project.getCicdTool()));
+        fields.put("issueTracker", value(project.getIssueTracker()));
+        fields.put("documentationUrl", value(project.getDocumentationUrl()));
+        fields.put("authenticationMethod", value(project.getAuthenticationMethod()));
+        fields.put("authorizationMethod", value(project.getAuthorizationMethod()));
+        fields.put("oauthProvider", value(project.getOauthProvider()));
+        fields.put("mtlsEnabled", project.isMtlsEnabled());
+        fields.put("jwtEnabled", project.isJwtEnabled());
+        fields.put("apiKeyEnabled", project.isApiKeyEnabled());
+        fields.put("secretsVault", value(project.getSecretsVault()));
+        fields.put("environments", project.getEnvironments() == null ? List.of() : project.getEnvironments());
+        fields.put("pciApplicable", project.isPciApplicable());
+        fields.put("standardRules", value(project.getStandardRules()));
+        fields.put("customRules", value(project.getCustomRules()));
+        fields.put("owaspTop10Enabled", project.isOwaspTop10Enabled());
+        fields.put("lintingEnabled", project.isLintingEnabled());
+        fields.put("status", project.getStatus());
+        return fields;
     }
 
-    private String nullToEmpty(String value) {
+    private List<ProjectEnvironment> normalizeEnvironments(List<ProjectEnvironment> requested) {
+        if (requested == null) return new ArrayList<>();
+        Set<String> types = new HashSet<>();
+        List<ProjectEnvironment> normalized = new ArrayList<>();
+        for (ProjectEnvironment environment : requested) {
+            String type = SlugNormalizer.trimToNull(environment.getEnvironmentType());
+            if (type == null || !types.add(type)) throw new IllegalArgumentException("Each environment type may be configured only once");
+            normalized.add(ProjectEnvironment.builder()
+                    .environmentType(type)
+                    .endpointUrl(SlugNormalizer.trimToNull(environment.getEndpointUrl()))
+                    .enabled(environment.isEnabled())
+                    .build());
+        }
+        return normalized;
+    }
+
+    private Object value(Object value) {
         return value == null ? "" : value;
     }
 }

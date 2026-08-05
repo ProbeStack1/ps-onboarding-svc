@@ -11,7 +11,10 @@ import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Builder
@@ -28,9 +31,52 @@ public class BusinessUnit {
     private String organizationId;
     private String name;
     private String code;
+    private String displayName;
+    private String parentBusinessUnitId;
+    private String division;
+    private String department;
+    private String lineOfBusiness;
     private String ownerName;
     private String ownerEmail;
+    private String businessExecutiveId;
+    private String businessOwnerId;
+    private String productOwnerId;
+    private String technicalOwnerId;
+    private String enterpriseArchitectId;
+    private String platformOwnerId;
+    private String securityOwnerId;
+    private String complianceOfficerId;
+    private String supportTeam;
+    private String operationsTeam;
     private String costCenter;
+    private BigDecimal budget;
+    private String chargebackModel;
+    private String billingAccount;
+    private BigDecimal monthlyBudget;
+    private BigDecimal annualBudget;
+    private BigDecimal aiBudget;
+    private BigDecimal apiBudget;
+    private String cloudProvider;
+    private String region;
+    private String kubernetesCluster;
+    private String namespace;
+    private String apiGateway;
+    private String aiGateway;
+    private String loggingPlatform;
+    private String monitoringPlatform;
+    private String secretManager;
+    private String approvalWorkflow;
+    private String riskClassification;
+    private String businessCriticality;
+    private String dataClassification;
+    @Builder.Default
+    private List<String> regulatoryStandards = new ArrayList<>();
+    private String retentionPolicy;
+    private String backupPolicy;
+    private boolean drEnabled;
+    private String slaTier;
+    @Builder.Default
+    private List<BusinessUnitQuota> quotas = new ArrayList<>();
     private String description;
     @Builder.Default
     private BusinessUnitStatus status = BusinessUnitStatus.ACTIVE;
