@@ -43,7 +43,9 @@ public class CorsConfig {
             "https://forgecatalog.probestack.io",
             "https://forgecatalog.com",
             "https://www.forgecatalog.com",
-            "https://forgegateway.probestack.io"
+            "https://forgegateway.probestack.io",
+            "https://forgeaigateway.probestack.io",
+            "https://forgehub.probestack.io/"
     );
 
     private final List<String> allowedOrigins;
