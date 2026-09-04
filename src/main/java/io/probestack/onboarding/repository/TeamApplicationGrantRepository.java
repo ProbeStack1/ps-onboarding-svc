@@ -8,6 +8,7 @@ import java.util.List;
 
 @Repository
 public interface TeamApplicationGrantRepository extends MongoRepository<TeamApplicationGrant, String> {
+    List<TeamApplicationGrant> findByOrganizationId(String organizationId);
     List<TeamApplicationGrant> findByOrganizationIdAndTeamId(String organizationId, String teamId);
     List<TeamApplicationGrant> findByOrganizationIdAndTeamIdIn(String organizationId, List<String> teamIds);
     List<TeamApplicationGrant> findByOrganizationIdAndApplicationId(String organizationId, String applicationId);

@@ -8,6 +8,7 @@ import io.probestack.onboarding.exception.ForbiddenOperationException;
 import io.probestack.onboarding.exception.InvalidStatusTransitionException;
 import io.probestack.onboarding.exception.OrganizationMismatchException;
 import io.probestack.onboarding.exception.ResourceNotFoundException;
+import io.probestack.onboarding.exception.UpstreamServiceException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +54,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({IllegalArgumentException.class, InvalidStatusTransitionException.class})
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(RuntimeException ex, HttpServletRequest request) {
         return failure(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), null, request);
+    }
+
+    @ExceptionHandler(UpstreamServiceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUpstream(UpstreamServiceException ex, HttpServletRequest request) {
+        log.warn("Organization member provider request failed", ex);
+        return failure(HttpStatus.BAD_GATEWAY, "UPSTREAM_SERVICE_ERROR", ex.getMessage(), null, request);
     }
 
     @ExceptionHandler(RuntimeException.class)

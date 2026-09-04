@@ -4,11 +4,9 @@ import io.probestack.onboarding.exception.ForbiddenOperationException;
 import io.probestack.onboarding.model.*;
 import io.probestack.onboarding.repository.*;
 import io.probestack.onboarding.util.ActorResolver;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -17,37 +15,13 @@ import java.util.stream.Collectors;
 
 @Service
 public class AccessControlService {
-    private final AccessAssignmentRepository assignmentRepository;
-    private final BusinessUnitRepository businessUnitRepository;
-    private final ProjectRepository projectRepository;
-    private final ApplicationRepository applicationRepository;
-    private final ApplicationInvitationRepository applicationInvitationRepository;
-    private final TeamInvitationRepository teamInvitationRepository;
-    private final TeamApplicationGrantRepository teamGrantRepository;
     private final ApplicationConsumerLinkRepository linkRepository;
-    private final Set<String> bootstrapOrgAdminEmails;
+    private final MemberAccessResolver memberAccessResolver;
 
-    public AccessControlService(AccessAssignmentRepository assignmentRepository,
-                                BusinessUnitRepository businessUnitRepository,
-                                ProjectRepository projectRepository,
-                                ApplicationRepository applicationRepository,
-                                ApplicationInvitationRepository applicationInvitationRepository,
-                                TeamInvitationRepository teamInvitationRepository,
-                                TeamApplicationGrantRepository teamGrantRepository,
-                                ApplicationConsumerLinkRepository linkRepository,
-                                @Value("${onboarding.access.org-admin-emails:}") String orgAdminEmails) {
-        this.assignmentRepository = assignmentRepository;
-        this.businessUnitRepository = businessUnitRepository;
-        this.projectRepository = projectRepository;
-        this.applicationRepository = applicationRepository;
-        this.applicationInvitationRepository = applicationInvitationRepository;
-        this.teamInvitationRepository = teamInvitationRepository;
-        this.teamGrantRepository = teamGrantRepository;
+    public AccessControlService(ApplicationConsumerLinkRepository linkRepository,
+                                MemberAccessResolver memberAccessResolver) {
         this.linkRepository = linkRepository;
-        this.bootstrapOrgAdminEmails = Arrays.stream(orgAdminEmails.split(","))
-                .map(this::normalizeEmail)
-                .filter(StringUtils::hasText)
-                .collect(Collectors.toSet());
+        this.memberAccessResolver = memberAccessResolver;
     }
 
     public EffectiveAccess effectiveAccess(String organizationId, ActorResolver.Actor actor) {
@@ -55,47 +29,24 @@ public class AccessControlService {
         if (!StringUtils.hasText(email)) {
             throw new ForbiddenOperationException("Authenticated token must contain an email claim for onboarding access");
         }
-        List<BusinessUnit> businessUnits = businessUnitRepository.findByOrganizationIdAndDeletedAtIsNullOrderByUpdatedAtDesc(organizationId);
-        List<OnboardingProject> projects = projectRepository.findByOrganizationIdAndDeletedAtIsNullOrderByUpdatedAtDesc(organizationId);
-        List<OnboardingApplication> applications = applicationRepository.findByOrganizationIdAndDeletedAtIsNullOrderByUpdatedAtDesc(organizationId);
+        MemberAccessResolver.ResolutionContext context = memberAccessResolver.loadContext(organizationId);
+        MemberAccessResolver.Resolution resolution = memberAccessResolver.resolve(
+                context,
+                new MemberAccessResolver.MemberIdentity(
+                        StringUtils.hasText(actor.userId()) ? actor.userId() : email,
+                        organizationId,
+                        email,
+                        actor.name(),
+                        actor.role()));
         EffectiveAccess access = new EffectiveAccess(organizationId, email);
-        if (bootstrapOrgAdminEmails.contains(email) || isOrgAdminActor(actor)) {
-            access.orgAdmin = true;
-        }
-
-        for (AccessAssignment assignment : assignmentRepository.findByOrganizationIdAndPrincipalEmailIgnoreCaseAndActiveTrue(organizationId, email)) {
-            applyAssignment(access, assignment, projects, applications);
-        }
-        for (BusinessUnit unit : businessUnits) {
-            if (emailEquals(email, unit.getOwnerEmail())) addBusinessUnitAdmin(access, unit.getId(), projects, applications);
-        }
-        for (OnboardingProject project : projects) {
-            if (emailEquals(email, project.getOwnerEmail())) addProjectAdmin(access, project.getId(), applications);
-        }
-        for (OnboardingApplication app : applications) {
-            if (emailEquals(email, app.getOwnerEmail())) addApplicationOwner(access, app.getId());
-        }
-        for (ApplicationInvitation invitation : applicationInvitationRepository.findByOrganizationIdAndStatusAndAcceptedByEmailIgnoreCaseOrderByCreatedAtDesc(organizationId, InvitationStatus.ACCEPTED, email)) {
-            access.viewApplicationIds.add(invitation.getApplicationId());
-            access.memberApplicationIds.add(invitation.getApplicationId());
-        }
-        List<String> teamIds = teamInvitationRepository.findByOrganizationIdAndStatusAndAcceptedByEmailIgnoreCaseOrderByCreatedAtDesc(organizationId, InvitationStatus.ACCEPTED, email)
-                .stream().map(TeamInvitation::getTeamId).distinct().toList();
-        if (!teamIds.isEmpty()) {
-            for (TeamApplicationGrant grant : teamGrantRepository.findByOrganizationIdAndTeamIdIn(organizationId, teamIds)) {
-                access.viewApplicationIds.add(grant.getApplicationId());
-                access.memberApplicationIds.add(grant.getApplicationId());
-            }
-        }
-        expandViewParents(access, projects, applications);
-        if (access.orgAdmin) {
-            access.manageBusinessUnitIds.addAll(businessUnits.stream().map(BusinessUnit::getId).collect(Collectors.toSet()));
-            access.viewBusinessUnitIds.addAll(access.manageBusinessUnitIds);
-            access.manageProjectIds.addAll(projects.stream().map(OnboardingProject::getId).collect(Collectors.toSet()));
-            access.viewProjectIds.addAll(access.manageProjectIds);
-            access.manageApplicationIds.addAll(applications.stream().map(OnboardingApplication::getId).collect(Collectors.toSet()));
-            access.viewApplicationIds.addAll(access.manageApplicationIds);
-        }
+        access.orgAdmin = resolution.orgAdmin();
+        access.viewBusinessUnitIds.addAll(resolution.viewBusinessUnitIds());
+        access.manageBusinessUnitIds.addAll(resolution.manageBusinessUnitIds());
+        access.viewProjectIds.addAll(resolution.viewProjectIds());
+        access.manageProjectIds.addAll(resolution.manageProjectIds());
+        access.viewApplicationIds.addAll(resolution.viewApplicationIds());
+        access.manageApplicationIds.addAll(resolution.manageApplicationIds());
+        access.memberApplicationIds.addAll(resolution.memberApplicationIds());
         return access;
     }
 
@@ -207,64 +158,8 @@ public class AccessControlService {
         return consumers.stream().filter(consumer -> visibleConsumerIds.contains(consumer.getId())).toList();
     }
 
-    private void applyAssignment(EffectiveAccess access, AccessAssignment assignment, List<OnboardingProject> projects, List<OnboardingApplication> apps) {
-        if (assignment.getRole() == AccessRole.ORG_ADMIN && assignment.getScopeType() == AccessScopeType.ORGANIZATION) {
-            access.orgAdmin = true;
-            return;
-        }
-        if (assignment.getRole() == AccessRole.BUSINESS_UNIT_ADMIN && assignment.getScopeType() == AccessScopeType.BUSINESS_UNIT) {
-            addBusinessUnitAdmin(access, assignment.getScopeId(), projects, apps);
-        } else if (assignment.getRole() == AccessRole.PROJECT_ADMIN && assignment.getScopeType() == AccessScopeType.PROJECT) {
-            addProjectAdmin(access, assignment.getScopeId(), apps);
-        } else if (assignment.getRole() == AccessRole.APPLICATION_OWNER && assignment.getScopeType() == AccessScopeType.APPLICATION) {
-            addApplicationOwner(access, assignment.getScopeId());
-        } else if (assignment.getRole() == AccessRole.APPLICATION_MEMBER && assignment.getScopeType() == AccessScopeType.APPLICATION) {
-            access.viewApplicationIds.add(assignment.getScopeId());
-            access.memberApplicationIds.add(assignment.getScopeId());
-        }
-    }
-
-    private void addBusinessUnitAdmin(EffectiveAccess access, String businessUnitId, List<OnboardingProject> projects, List<OnboardingApplication> apps) {
-        access.manageBusinessUnitIds.add(businessUnitId);
-        access.viewBusinessUnitIds.add(businessUnitId);
-        projects.stream().filter(project -> businessUnitId.equals(project.getBusinessUnitId())).forEach(project -> addProjectAdmin(access, project.getId(), apps));
-    }
-
-    private void addProjectAdmin(EffectiveAccess access, String projectId, List<OnboardingApplication> apps) {
-        access.manageProjectIds.add(projectId);
-        access.viewProjectIds.add(projectId);
-        apps.stream().filter(app -> projectId.equals(app.getProjectId())).forEach(app -> addApplicationOwner(access, app.getId()));
-    }
-
-    private void addApplicationOwner(EffectiveAccess access, String applicationId) {
-        access.manageApplicationIds.add(applicationId);
-        access.viewApplicationIds.add(applicationId);
-    }
-
-    private void expandViewParents(EffectiveAccess access, List<OnboardingProject> projects, List<OnboardingApplication> apps) {
-        for (OnboardingApplication app : apps) {
-            if (access.viewApplicationIds.contains(app.getId()) || access.manageApplicationIds.contains(app.getId())) {
-                access.viewProjectIds.add(app.getProjectId());
-                access.viewBusinessUnitIds.add(app.getBusinessUnitId());
-            }
-        }
-        for (OnboardingProject project : projects) {
-            if (access.viewProjectIds.contains(project.getId()) || access.manageProjectIds.contains(project.getId())) {
-                access.viewBusinessUnitIds.add(project.getBusinessUnitId());
-            }
-        }
-    }
-
     private ForbiddenOperationException forbidden() {
         return new ForbiddenOperationException("You do not have access to perform this onboarding action");
-    }
-
-    private boolean emailEquals(String left, String right) {
-        return StringUtils.hasText(left) && left.equals(normalizeEmail(right));
-    }
-
-    private boolean isOrgAdminActor(ActorResolver.Actor actor) {
-        return actor != null && "ORG_ADMIN".equalsIgnoreCase(actor.role());
     }
 
     private String normalizeEmail(String email) {

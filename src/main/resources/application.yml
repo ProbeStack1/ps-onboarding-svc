@@ -31,6 +31,10 @@ logging:
 onboarding:
   access:
     org-admin-emails: ${ONBOARDING_ORG_ADMIN_EMAILS:}
+  members:
+    admin-api:
+      base-url: ${ONBOARDING_ADMIN_API_BASE_URL:https://probestack.io/admin-backend}
+      accounts-path: ${ONBOARDING_ADMIN_ACCOUNTS_PATH:/api/accounts}
 
 forge:
   authn:
