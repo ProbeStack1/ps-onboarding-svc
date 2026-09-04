@@ -61,8 +61,25 @@ public class AuthenticationSecurityConfig {
 
     @Bean
     @ConditionalOnProperty(prefix = "forge.authn", name = "enabled", havingValue = "true", matchIfMissing = true)
+    CookieBearerTokenFilter cookieBearerTokenFilter() {
+        return new CookieBearerTokenFilter();
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "forge.authn", name = "enabled", havingValue = "true", matchIfMissing = true)
+    FilterRegistrationBean<CookieBearerTokenFilter> disableStandaloneCookieFilterRegistration(
+            CookieBearerTokenFilter cookieBearerTokenFilter) {
+        FilterRegistrationBean<CookieBearerTokenFilter> registration =
+                new FilterRegistrationBean<>(cookieBearerTokenFilter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "forge.authn", name = "enabled", havingValue = "true", matchIfMissing = true)
     SecurityFilterChain authenticationSecurityFilterChain(
             HttpSecurity http,
+            CookieBearerTokenFilter cookieBearerTokenFilter,
             ForgeAuthnAuthenticationFilter authenticationFilter,
             AuthenticationEntryPoint authenticationEntryPoint,
             AccessDeniedHandler accessDeniedHandler) throws Exception {
@@ -77,7 +94,8 @@ public class AuthenticationSecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated())
-                .addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(cookieBearerTokenFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(authenticationFilter, CookieBearerTokenFilter.class);
         return http.build();
     }
 

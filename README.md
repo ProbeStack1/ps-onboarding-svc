@@ -18,7 +18,14 @@ GET /onboarding-api/actuator/health
 
 ## Auth and Tenant Model
 
-All onboarding APIs except health and API documentation endpoints require a bearer token:
+All onboarding APIs except health and API documentation endpoints require the context token in
+the browser cookie used by ProbeStack:
+
+```http
+Cookie: ps_auth_token=<context-token>
+```
+
+Service clients can alternatively send the standard bearer header:
 
 ```http
 Authorization: Bearer <context-token>

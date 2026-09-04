@@ -12,6 +12,7 @@ import io.probestack.onboarding.dto.businessunit.BusinessUnitResponse;
 import io.probestack.onboarding.model.BusinessUnitStatus;
 import io.probestack.onboarding.service.BusinessUnitService;
 import io.probestack.onboarding.util.ActorResolver;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -91,6 +92,38 @@ class AuthenticationSecurityIntegrationTest {
                 .andExpect(jsonPath("$.data.organizationId").value(ORGANIZATION_ID));
 
         verify(authnValidator).validate("Bearer valid-context-token");
+        verify(businessUnitService).create(
+                eq(ORGANIZATION_ID),
+                any(),
+                eq(new ActorResolver.Actor(
+                        "d23e26c4-fc12-4553-8b28-bb4a6fdad564",
+                        "admin@forgecrux.com",
+                        "admin@forgecrux.com",
+                        "ORG_ADMIN")));
+    }
+
+    @Test
+    void protectedEndpointAcceptsPsAuthTokenCookie() throws Exception {
+        AuthnToken token = tokenWithPastedClaims();
+        when(authnValidator.validate("Bearer cookie-context-token")).thenReturn(token);
+        when(businessUnitService.create(eq(ORGANIZATION_ID), any(), any())).thenReturn(
+                BusinessUnitResponse.builder()
+                        .id("bu-002")
+                        .organizationId(ORGANIZATION_ID)
+                        .name("Wealth Management")
+                        .code("WEALTH")
+                        .status(BusinessUnitStatus.ACTIVE)
+                        .build());
+
+        mockMvc.perform(post("/api/v1/onboarding/business-units")
+                        .cookie(new Cookie("ps_auth_token", "cookie-context-token"))
+                        .header("Authorization", "Bearer ignored-header-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validRequest())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.organizationId").value(ORGANIZATION_ID));
+
+        verify(authnValidator).validate("Bearer cookie-context-token");
         verify(businessUnitService).create(
                 eq(ORGANIZATION_ID),
                 any(),
