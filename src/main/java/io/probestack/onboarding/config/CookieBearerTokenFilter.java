@@ -6,6 +6,8 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -21,6 +23,7 @@ import java.util.Set;
  */
 final class CookieBearerTokenFilter extends OncePerRequestFilter {
     static final String AUTH_COOKIE_NAME = "ps_auth_token";
+    private static final Logger log = LoggerFactory.getLogger(CookieBearerTokenFilter.class);
 
     @Override
     protected void doFilterInternal(
@@ -29,6 +32,11 @@ final class CookieBearerTokenFilter extends OncePerRequestFilter {
             FilterChain filterChain) throws ServletException, IOException {
         String cookieToken = cookieToken(request);
         if (cookieToken == null) {
+            log.debug("authSource=cookie|event=notFound|cookieName={}|authorizationHeaderPresent={}|method={}|path={}",
+                    AUTH_COOKIE_NAME,
+                    request.getHeader(HttpHeaders.AUTHORIZATION) != null,
+                    request.getMethod(),
+                    request.getRequestURI());
             filterChain.doFilter(request, response);
             return;
         }
@@ -36,7 +44,13 @@ final class CookieBearerTokenFilter extends OncePerRequestFilter {
         String bearerValue = cookieToken.startsWith("Bearer ")
                 ? cookieToken
                 : "Bearer " + cookieToken;
+        log.debug("authSource=cookie|event=adaptedToBearer|cookieName={}|method={}|path={}",
+                AUTH_COOKIE_NAME, request.getMethod(), request.getRequestURI());
         filterChain.doFilter(new AuthorizationHeaderRequest(request, bearerValue), response);
+        if (response.getStatus() == HttpServletResponse.SC_UNAUTHORIZED) {
+            log.warn("authSource=cookie|event=rejected|cookieName={}|method={}|path={}",
+                    AUTH_COOKIE_NAME, request.getMethod(), request.getRequestURI());
+        }
     }
 
     private String cookieToken(HttpServletRequest request) {

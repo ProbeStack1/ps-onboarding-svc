@@ -5,6 +5,7 @@ import com.forge.security.authn.validator.AuthnValidator;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -61,7 +62,11 @@ public class AuthenticationSecurityConfig {
 
     @Bean
     @ConditionalOnProperty(prefix = "forge.authn", name = "enabled", havingValue = "true", matchIfMissing = true)
-    CookieBearerTokenFilter cookieBearerTokenFilter() {
+    CookieBearerTokenFilter cookieBearerTokenFilter(
+            @Value("${forge.authn.jwks-uri:}") String jwksUri) {
+        if (!org.springframework.util.StringUtils.hasText(jwksUri)) {
+            throw new IllegalStateException("forge.authn.jwks-uri must not be blank when authentication is enabled");
+        }
         return new CookieBearerTokenFilter();
     }
 
