@@ -10,28 +10,31 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
 @Component
 public class AdminBackendOrganizationMemberClient implements OrganizationMemberClient {
     private static final Logger log = LoggerFactory.getLogger(AdminBackendOrganizationMemberClient.class);
+    private static final String AUTH_COOKIE_NAME = "ps_auth_token";
     private static final List<String> ARRAY_FIELDS = List.of("accounts", "users", "members", "items", "content", "results");
 
     private final RestClient restClient;
-    private final String accountsPath;
+    private final String usersPath;
 
     public AdminBackendOrganizationMemberClient(
             RestClient.Builder builder,
             @Value("${onboarding.members.admin-api.base-url:https://probestack.io/admin-backend}") String baseUrl,
-            @Value("${onboarding.members.admin-api.accounts-path:/api/accounts}") String accountsPath) {
+            @Value("${onboarding.members.admin-api.users-path:/api/organizations/%s/users-with-roles}") String usersPath) {
         if (!StringUtils.hasText(baseUrl)) {
             throw new IllegalStateException("onboarding.members.admin-api.base-url must not be blank");
         }
         this.restClient = builder.baseUrl(baseUrl.trim()).build();
-        this.accountsPath = normalizePath(accountsPath);
+        this.usersPath = normalizePath(usersPath);
     }
 
     @Override
@@ -45,19 +48,27 @@ public class AdminBackendOrganizationMemberClient implements OrganizationMemberC
         try {
             RestClient.RequestHeadersSpec<?> request = restClient.get()
                     .uri(uriBuilder -> {
-                        var builder = uriBuilder.path(accountsPath)
-                                .queryParam("organization", organizationId)
-                                .queryParam("page", Math.max(page, 0))
-                                .queryParam("size", Math.max(1, Math.min(size, 200)));
-                        if (StringUtils.hasText(search)) builder.queryParam("search", search.trim());
-                        if (StringUtils.hasText(status)) builder.queryParam("status", status.trim());
+                        var builder = uriBuilder.path(resolveUsersPath(organizationId));
+                        if (StringUtils.hasText(status) && !"ALL".equalsIgnoreCase(status)) {
+                            builder.queryParam("status", status.trim().toLowerCase(Locale.ROOT));
+                        }
                         return builder.build();
                     });
             if (StringUtils.hasText(authorization)) {
-                request = request.header(HttpHeaders.AUTHORIZATION, authorization.trim());
+                String header = authorization.trim();
+                request = request
+                        .header(HttpHeaders.AUTHORIZATION, header)
+                        .header(HttpHeaders.COOKIE, AUTH_COOKIE_NAME + "=" + bearerValue(header));
             }
             JsonNode body = request.retrieve().body(JsonNode.class);
-            return parse(body);
+            return paginate(filter(parse(body).items(), search, status), page, size);
+        } catch (RestClientResponseException ex) {
+            log.warn("event=adminMemberFetchFailed|organizationId={}|upstreamStatus={}|reason={}",
+                    organizationId, ex.getStatusCode().value(), ex.getStatusText());
+            throw new UpstreamServiceException(
+                    "Unable to load organization members from the admin backend (HTTP "
+                            + ex.getStatusCode().value() + ")",
+                    ex);
         } catch (RestClientException ex) {
             log.warn("event=adminMemberFetchFailed|organizationId={}|reason={}", organizationId, ex.getMessage());
             throw new UpstreamServiceException("Unable to load organization members from the admin backend", ex);
@@ -98,6 +109,13 @@ public class AdminBackendOrganizationMemberClient implements OrganizationMemberC
     private OrganizationMemberRecord toMember(JsonNode item) {
         JsonNode admin = object(item, "admin");
         JsonNode user = object(item, "user");
+        String email = firstText(item, "email", "userEmail", "user_email");
+        if (!StringUtils.hasText(email) && admin != null) email = firstText(admin, "email", "userEmail", "user_email");
+        if (!StringUtils.hasText(email) && user != null) email = firstText(user, "email", "userEmail", "user_email");
+        if (!StringUtils.hasText(email)) {
+            log.debug("event=adminMemberSkipped|reason=missingEmail");
+            return null;
+        }
         String principalId = firstText(item, "principalId", "principal_id", "id", "_id", "userId", "user_id", "sub");
         if (!StringUtils.hasText(principalId) && admin != null) {
             principalId = firstText(admin, "principalId", "id", "_id", "userId", "user_id");
@@ -105,14 +123,8 @@ public class AdminBackendOrganizationMemberClient implements OrganizationMemberC
         if (!StringUtils.hasText(principalId) && user != null) {
             principalId = firstText(user, "principalId", "id", "_id", "userId", "user_id", "sub");
         }
-        String email = firstText(item, "email", "userEmail", "user_email");
-        if (!StringUtils.hasText(email) && admin != null) email = firstText(admin, "email", "userEmail", "user_email");
-        if (!StringUtils.hasText(email) && user != null) email = firstText(user, "email", "userEmail", "user_email");
-        if (!StringUtils.hasText(principalId) || !StringUtils.hasText(email)) {
-            log.debug("event=adminMemberSkipped|reason=missingPrincipalOrEmail");
-            return null;
-        }
-        String name = firstText(item, "name", "fullName", "full_name", "userName", "username");
+        if (!StringUtils.hasText(principalId)) principalId = email.trim().toLowerCase(Locale.ROOT);
+        String name = firstText(item, "name", "fullName", "full_name", "userName", "user_name", "username");
         if (!StringUtils.hasText(name) && admin != null) name = firstText(admin, "name", "fullName", "userName", "username");
         if (!StringUtils.hasText(name) && user != null) name = firstText(user, "name", "fullName", "userName", "username");
         if (!StringUtils.hasText(name)) {
@@ -135,9 +147,43 @@ public class AdminBackendOrganizationMemberClient implements OrganizationMemberC
                 principalId.trim(),
                 email.trim().toLowerCase(Locale.ROOT),
                 name.trim(),
-                normalizeCode(role, "USER"),
+                normalizeOrganizationRole(role),
                 normalizeCode(accountStatus, active ? "ACTIVE" : "INACTIVE"),
                 active);
+    }
+
+    private List<OrganizationMemberRecord> filter(
+            List<OrganizationMemberRecord> members,
+            String search,
+            String status) {
+        String term = StringUtils.hasText(search) ? search.trim().toLowerCase(Locale.ROOT) : null;
+        return members.stream()
+                .filter(member -> !StringUtils.hasText(status)
+                        || "ALL".equalsIgnoreCase(status)
+                        || ("ACTIVE".equalsIgnoreCase(status) && member.active())
+                        || status.equalsIgnoreCase(member.accountStatus()))
+                .filter(member -> term == null
+                        || member.principalId().toLowerCase(Locale.ROOT).contains(term)
+                        || member.email().toLowerCase(Locale.ROOT).contains(term)
+                        || member.name().toLowerCase(Locale.ROOT).contains(term))
+                .sorted(Comparator.comparing(OrganizationMemberRecord::name, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(OrganizationMemberRecord::email, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
+    private MemberPage paginate(List<OrganizationMemberRecord> members, int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(size, 200));
+        long offset = (long) safePage * safeSize;
+        int from = offset >= members.size() ? members.size() : (int) offset;
+        int to = Math.min(from + safeSize, members.size());
+        return new MemberPage(List.copyOf(members.subList(from, to)), members.size());
+    }
+
+    private String bearerValue(String authorization) {
+        return authorization.regionMatches(true, 0, "Bearer ", 0, 7)
+                ? authorization.substring(7).trim()
+                : authorization;
     }
 
     private long firstLong(JsonNode root, String... fields) {
@@ -188,15 +234,34 @@ public class AdminBackendOrganizationMemberClient implements OrganizationMemberC
     }
 
     private String normalizeCode(String value, String fallback) {
-        return StringUtils.hasText(value)
-                ? value.trim().replaceAll("[-\\s]+", "_").toUpperCase(Locale.ROOT)
-                : fallback;
+        if (!StringUtils.hasText(value)) return fallback;
+        return value.trim()
+                .replaceAll("[^A-Za-z0-9]+", "_")
+                .replaceAll("^_+|_+$", "")
+                .toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeOrganizationRole(String value) {
+        String role = normalizeCode(value, "USER");
+        return switch (role) {
+            case "ORG_ADMIN_OWNER", "ORGANIZATION_ADMIN", "ORGANIZATION_ADMIN_OWNER" -> "ORG_ADMIN";
+            default -> role;
+        };
     }
 
     private String normalizePath(String value) {
-        if (!StringUtils.hasText(value)) return "/api/accounts";
+        if (!StringUtils.hasText(value)) return "/api/organizations/%s/users-with-roles";
         String path = value.trim();
         return path.startsWith("/") ? path : "/" + path;
+    }
+
+    private String resolveUsersPath(String organizationId) {
+        if (usersPath.contains("{organizationId}")) {
+            return usersPath.replace("{organizationId}", organizationId);
+        }
+        if (usersPath.contains("%s")) return usersPath.formatted(organizationId);
+        throw new IllegalStateException(
+                "onboarding.members.admin-api.users-path must contain %s or {organizationId}");
     }
 
     private String nullToEmpty(String value) {

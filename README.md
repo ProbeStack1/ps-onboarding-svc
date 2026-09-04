@@ -110,8 +110,12 @@ Admin directory integration can be overridden per environment:
 
 ```text
 ONBOARDING_ADMIN_API_BASE_URL=https://probestack.io/admin-backend
-ONBOARDING_ADMIN_ACCOUNTS_PATH=/api/accounts
+ONBOARDING_ADMIN_USERS_PATH=/api/organizations/%s/users-with-roles
 ```
+
+The provider response is a non-paginated array. Onboarding forwards `status` in lower case, then
+applies search and pagination locally. When the provider omits a user ID, normalized email is used
+as the member principal key.
 
 ## Admin access catalog
 
