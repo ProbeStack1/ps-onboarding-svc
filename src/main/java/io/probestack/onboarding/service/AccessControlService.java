@@ -53,7 +53,7 @@ public class AccessControlService {
     public EffectiveAccess effectiveAccess(String organizationId, ActorResolver.Actor actor) {
         String email = normalizeEmail(actor == null ? null : actor.email());
         if (!StringUtils.hasText(email)) {
-            throw new ForbiddenOperationException("X-User-Email header is required for onboarding access");
+            throw new ForbiddenOperationException("Authenticated token must contain an email claim for onboarding access");
         }
         List<BusinessUnit> businessUnits = businessUnitRepository.findByOrganizationIdAndDeletedAtIsNullOrderByUpdatedAtDesc(organizationId);
         List<OnboardingProject> projects = projectRepository.findByOrganizationIdAndDeletedAtIsNullOrderByUpdatedAtDesc(organizationId);

@@ -1,16 +1,18 @@
 {
   "info": {
     "name": "ProbeStack Onboarding Service",
-    "description": "Postman collection for ps-onboarding-svc. Uses header-based organization and actor identity. Run the create requests in this order for the happy path: Consumer, Business Unit, Project, Application.",
+    "description": "Postman collection for ps-onboarding-svc. Organization and actor identity come from the validated bearer-token claims. Run the create requests in this order for the happy path: Consumer, Business Unit, Project, Application.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{accessToken}}", "type": "string" }
+    ]
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8084/onboarding-api" },
-    { "key": "organizationId", "value": "org-demo-001" },
-    { "key": "userId", "value": "user-demo-001" },
-    { "key": "userEmail", "value": "admin@probestack.io" },
-    { "key": "userName", "value": "ProbeStack Admin" },
-    { "key": "userRole", "value": "ADMIN" },
+    { "key": "accessToken", "value": "" },
     { "key": "businessUnitId", "value": "" },
     { "key": "projectId", "value": "" },
     { "key": "applicationId", "value": "" },
@@ -36,6 +38,7 @@
         {
           "name": "Health Check",
           "request": {
+            "auth": { "type": "noauth" },
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/actuator/health"

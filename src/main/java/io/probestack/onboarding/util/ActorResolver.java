@@ -1,8 +1,11 @@
 package io.probestack.onboarding.util;
 
+import com.forge.security.authn.model.AuthnToken;
 import io.probestack.onboarding.dto.common.ActorDTO;
 import io.probestack.onboarding.exception.ForbiddenOperationException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -10,12 +13,19 @@ import java.util.Set;
 
 @Component
 public class ActorResolver {
-    public static final String ORGANIZATION_HEADER = "X-Organization-Id";
+    private static final String ORGANIZATION_ID_CLAIM = "organization_id";
+    private static final String EMAIL_CLAIM = "email";
+    private static final String NAME_CLAIM = "name";
+    private static final String ROLE_CLAIM = "role";
 
     public String requireOrganizationId(HttpServletRequest request) {
-        String organizationId = trimToNull(header(request, ORGANIZATION_HEADER));
+        AuthnToken token = requireAuthnToken();
+        String organizationId = firstText(
+                stringClaim(token, ORGANIZATION_ID_CLAIM),
+                stringClaim(token, "userOrgId"),
+                stringClaim(token, "backendOrgId"));
         if (!StringUtils.hasText(organizationId)) {
-            throw new ForbiddenOperationException("X-Organization-Id header is required");
+            throw new ForbiddenOperationException("Authenticated token must contain an organization_id claim");
         }
         return organizationId;
     }
@@ -23,21 +33,33 @@ public class ActorResolver {
     public Actor requireActor(ActorDTO requestActor, HttpServletRequest request) {
         Actor actor = resolveActor(requestActor, request);
         if (!StringUtils.hasText(actor.email()) && !StringUtils.hasText(actor.userId())) {
-            throw new ForbiddenOperationException("User identity is required for this onboarding action");
+            throw new ForbiddenOperationException("Authenticated token must contain a user identity");
         }
         return actor;
     }
 
     public Actor resolveActor(ActorDTO requestActor, HttpServletRequest request) {
-        String userId = firstText(header(request, "X-User-Id"), requestActor == null ? null : requestActor.getUserId());
-        String email = firstText(header(request, "X-User-Email"), requestActor == null ? null : requestActor.getEmail());
-        String name = firstText(header(request, "X-User-Name"), requestActor == null ? null : requestActor.getName(), email, userId, "User");
-        String role = firstText(header(request, "X-User-Role"), requestActor == null ? null : requestActor.getRole(), "USER");
+        AuthnToken token = requireAuthnToken();
+        String userId = firstText(token.getSubject(), stringClaim(token, "userId"), stringClaim(token, "admin_id"));
+        String email = firstText(stringClaim(token, EMAIL_CLAIM), stringClaim(token, "userEmail"));
+        String name = firstText(stringClaim(token, NAME_CLAIM), stringClaim(token, "userName"), email, userId, "User");
+        String role = firstText(stringClaim(token, ROLE_CLAIM), stringClaim(token, "userRole"), "USER");
         return new Actor(trimToNull(userId), trimToNull(email), trimToNull(name), normalizeRole(role));
     }
 
-    private String header(HttpServletRequest request, String name) {
-        return request == null ? null : request.getHeader(name);
+    private AuthnToken requireAuthnToken() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || !(authentication.getDetails() instanceof AuthnToken authnToken)) {
+            throw new ForbiddenOperationException("A validated authentication token is required");
+        }
+        return authnToken;
+    }
+
+    private String stringClaim(AuthnToken token, String name) {
+        Object value = token.getClaim(name);
+        return value instanceof String text ? text : null;
     }
 
     private String firstText(String... values) {

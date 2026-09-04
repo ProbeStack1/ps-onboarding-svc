@@ -18,23 +18,27 @@ GET /onboarding-api/actuator/health
 
 ## Auth and Tenant Model
 
-All onboarding APIs require:
+All onboarding APIs except health and API documentation endpoints require a bearer token:
 
-- `X-Organization-Id`
+```http
+Authorization: Bearer <context-token>
+```
 
-Mutating APIs also require one of:
+The token is validated by `forge-auth-lib` using:
 
-- `X-User-Id`
-- `X-User-Email`
+- Issuer: `https://auth.probestack.io`
+- Audience: `probestack-api`
+- JWKS: `https://probestack.io/admin-backend/api/public/users/context-token/jwks`
 
-Optional actor fields are accepted in request bodies as a fallback, matching the community service convention. Header identity wins over body identity.
+Tenant and actor identity are taken only from validated token claims:
 
-Supported identity headers:
+- Organization: `organization_id`
+- User ID: `sub`
+- Email: `email`
+- Name: `name`
+- Role: `role`
 
-- `X-User-Id`
-- `X-User-Email`
-- `X-User-Name`
-- `X-User-Role`: `USER`, `MODERATOR`, or `ADMIN`
+Legacy `X-Organization-Id` and `X-User-*` headers, and actor fields in request bodies, are not trusted for identity.
 
 ## Main APIs
 

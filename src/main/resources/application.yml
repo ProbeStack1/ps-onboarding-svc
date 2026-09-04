@@ -6,6 +6,9 @@ server:
 spring:
   application:
     name: ps-onboarding-svc
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/probestack}
@@ -28,4 +31,15 @@ logging:
 onboarding:
   access:
     org-admin-emails: ${ONBOARDING_ORG_ADMIN_EMAILS:}
+
+forge:
+  authn:
+    enabled: ${FORGE_AUTHN_ENABLED:true}
+    issuer-uri: ${FORGE_AUTHN_ISSUER_URI:https://auth.probestack.io}
+    audience: ${FORGE_AUTHN_AUDIENCE:probestack-api}
+    jwks-uri: ${FORGE_AUTHN_JWKS_URI:https://probestack.io/admin-backend/api/public/users/context-token/jwks}
+    jwks-cache-duration-hours: ${FORGE_AUTHN_JWKS_CACHE_DURATION_HOURS:24}
+    connect-timeout-ms: ${FORGE_AUTHN_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${FORGE_AUTHN_READ_TIMEOUT_MS:5000}
+    http-proxy: ${FORGE_AUTHN_HTTP_PROXY:}
 
