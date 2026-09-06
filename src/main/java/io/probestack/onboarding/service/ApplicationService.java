@@ -59,7 +59,8 @@ public class ApplicationService {
     public ApplicationResponse create(String organizationId, ApplicationCreateRequest request, ActorResolver.Actor actor) {
         BusinessUnit businessUnit = businessUnitService.find(organizationId, request.getBusinessUnitId());
         OnboardingProject project = projectService.find(organizationId, request.getProjectId());
-        accessControlService.requireProjectManage(organizationId, project.getId(), actor);
+        accessControlService.requireProjectManage(
+                organizationId, project.getId(), actor, ServiceTokenAuthorizer.APPLICATIONS_WRITE);
         requireProjectUnderBusinessUnit(project, businessUnit.getId());
         String applicationId = SlugNormalizer.normalizeCode(request.getApplicationId());
         if (applicationRepository.existsByOrganizationIdAndApplicationId(organizationId, applicationId)) {
@@ -124,7 +125,8 @@ public class ApplicationService {
         String nextProjectId = StringUtils.hasText(request.getProjectId()) ? request.getProjectId() : app.getProjectId();
         BusinessUnit businessUnit = businessUnitService.find(organizationId, nextBusinessUnitId);
         OnboardingProject project = projectService.find(organizationId, nextProjectId);
-        accessControlService.requireProjectManage(organizationId, project.getId(), actor);
+        accessControlService.requireProjectManage(
+                organizationId, project.getId(), actor, ServiceTokenAuthorizer.APPLICATIONS_WRITE);
         requireProjectUnderBusinessUnit(project, businessUnit.getId());
         app.setBusinessUnitId(businessUnit.getId());
         app.setProjectId(project.getId());

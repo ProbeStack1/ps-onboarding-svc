@@ -26,12 +26,15 @@ public class AdminAccessCatalogService {
 
     private final OrganizationMemberClient memberClient;
     private final MemberAccessResolver accessResolver;
+    private final ServiceTokenAuthorizer serviceTokenAuthorizer;
 
     public AdminAccessCatalogService(
             OrganizationMemberClient memberClient,
-            MemberAccessResolver accessResolver) {
+            MemberAccessResolver accessResolver,
+            ServiceTokenAuthorizer serviceTokenAuthorizer) {
         this.memberClient = memberClient;
         this.accessResolver = accessResolver;
+        this.serviceTokenAuthorizer = serviceTokenAuthorizer;
     }
 
     public PagedResult<AdminUserAccessResponse> listUsers(
@@ -45,7 +48,7 @@ public class AdminAccessCatalogService {
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(size, 200));
         MemberAccessResolver.ResolutionContext context = accessResolver.loadContext(organizationId);
-        requireAdmin(context, organizationId, actor);
+        requireAdmin(context, organizationId, actor, ServiceTokenAuthorizer.ACCESS_READ);
         OrganizationMemberClient.MemberPage memberPage = memberClient.fetchMembers(
                 organizationId, safePage, safeSize, search, status, authorization);
         List<AdminUserAccessResponse> users = memberPage.items().stream()
@@ -68,7 +71,7 @@ public class AdminAccessCatalogService {
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(size, 100));
         MemberAccessResolver.ResolutionContext context = accessResolver.loadContext(organizationId);
-        requireAdmin(context, organizationId, actor);
+        requireAdmin(context, organizationId, actor, ServiceTokenAuthorizer.ACCESS_READ);
         List<ResourceRef> allResources = resources(context, resourceType);
         int from = Math.min(safePage * safeSize, allResources.size());
         int to = Math.min(from + safeSize, allResources.size());
@@ -100,7 +103,7 @@ public class AdminAccessCatalogService {
             String authorization,
             ActorResolver.Actor actor) {
         MemberAccessResolver.ResolutionContext context = accessResolver.loadContext(organizationId);
-        requireAdmin(context, organizationId, actor);
+        requireAdmin(context, organizationId, actor, ServiceTokenAuthorizer.BOOTSTRAP_READ);
         OrganizationMemberRecord member = memberClient.findMember(organizationId, principalId, authorization)
                 .orElseThrow(() -> new ResourceNotFoundException("Organization member not found: " + principalId));
         AdminUserAccessResponse access = resolveUser(context, member);
@@ -116,7 +119,7 @@ public class AdminAccessCatalogService {
             String authorization,
             ActorResolver.Actor actor) {
         MemberAccessResolver.ResolutionContext context = accessResolver.loadContext(organizationId);
-        requireAdmin(context, organizationId, actor);
+        requireAdmin(context, organizationId, actor, ServiceTokenAuthorizer.ACCESS_READ);
         OrganizationMemberRecord member = memberClient.findMember(organizationId, principalId, authorization)
                 .orElseThrow(() -> new ResourceNotFoundException("Organization member not found: " + principalId));
         return resolveUser(context, member);
@@ -130,7 +133,7 @@ public class AdminAccessCatalogService {
             String authorization,
             ActorResolver.Actor actor) {
         MemberAccessResolver.ResolutionContext context = accessResolver.loadContext(organizationId);
-        requireAdmin(context, organizationId, actor);
+        requireAdmin(context, organizationId, actor, ServiceTokenAuthorizer.ACCESS_READ);
         ResourceRef resource = resources(context, resourceType).stream()
                 .filter(candidate -> candidate.id().equals(resourceId))
                 .findFirst()
@@ -384,7 +387,9 @@ public class AdminAccessCatalogService {
     private void requireAdmin(
             MemberAccessResolver.ResolutionContext context,
             String organizationId,
-            ActorResolver.Actor actor) {
+            ActorResolver.Actor actor,
+            String requiredServiceScope) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, requiredServiceScope)) return;
         MemberAccessResolver.MemberIdentity caller = new MemberAccessResolver.MemberIdentity(
                 StringUtils.hasText(actor.userId()) ? actor.userId() : actor.email(),
                 organizationId,

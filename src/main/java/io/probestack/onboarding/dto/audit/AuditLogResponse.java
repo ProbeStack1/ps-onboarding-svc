@@ -26,6 +26,9 @@ public class AuditLogResponse {
     private String actorEmail;
     private String actorName;
     private String actorRole;
+    private String actorPrincipalType;
+    private String actorClientId;
+    private String actorTokenType;
     private List<FieldChange> changedFields;
     private Map<String, Object> snapshotBefore;
     private Map<String, Object> snapshotAfter;

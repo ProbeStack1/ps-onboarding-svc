@@ -55,6 +55,19 @@ public class PrincipalRoleAssignmentController extends ResponseSupport {
                 request);
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<MemberRoleAssignmentResponse>> get(
+            @PathVariable String id,
+            HttpServletRequest request) {
+        String organizationId = actorResolver.requireOrganizationId(request);
+        return ok("Role assignment fetched successfully",
+                assignmentService.get(
+                        organizationId,
+                        id,
+                        actorResolver.requireActor(null, request)),
+                request);
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<ApiResponse<MemberRoleAssignmentResponse>> update(
             @PathVariable String id,

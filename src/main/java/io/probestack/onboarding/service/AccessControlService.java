@@ -17,11 +17,14 @@ import java.util.stream.Collectors;
 public class AccessControlService {
     private final ApplicationConsumerLinkRepository linkRepository;
     private final MemberAccessResolver memberAccessResolver;
+    private final ServiceTokenAuthorizer serviceTokenAuthorizer;
 
     public AccessControlService(ApplicationConsumerLinkRepository linkRepository,
-                                MemberAccessResolver memberAccessResolver) {
+                                MemberAccessResolver memberAccessResolver,
+                                ServiceTokenAuthorizer serviceTokenAuthorizer) {
         this.linkRepository = linkRepository;
         this.memberAccessResolver = memberAccessResolver;
+        this.serviceTokenAuthorizer = serviceTokenAuthorizer;
     }
 
     public EffectiveAccess effectiveAccess(String organizationId, ActorResolver.Actor actor) {
@@ -51,41 +54,49 @@ public class AccessControlService {
     }
 
     public boolean canViewBusinessUnit(String organizationId, String id, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.BUSINESS_UNITS_READ)) return true;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         return access.orgAdmin || access.viewBusinessUnitIds.contains(id) || access.manageBusinessUnitIds.contains(id);
     }
 
     public boolean canManageBusinessUnit(String organizationId, String id, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.BUSINESS_UNITS_WRITE)) return true;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         return access.orgAdmin || access.manageBusinessUnitIds.contains(id);
     }
 
     public boolean canViewProject(String organizationId, String id, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.PROJECTS_READ)) return true;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         return access.orgAdmin || access.viewProjectIds.contains(id) || access.manageProjectIds.contains(id);
     }
 
     public boolean canManageProject(String organizationId, String id, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.PROJECTS_WRITE)) return true;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         return access.orgAdmin || access.manageProjectIds.contains(id);
     }
 
     public boolean canViewApplication(String organizationId, String id, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.APPLICATIONS_READ)) return true;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         return access.orgAdmin || access.viewApplicationIds.contains(id) || access.manageApplicationIds.contains(id);
     }
 
     public boolean canManageApplication(String organizationId, String id, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.APPLICATIONS_WRITE)) return true;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         return access.orgAdmin || access.manageApplicationIds.contains(id);
     }
 
     public boolean canManageConsumerCatalog(String organizationId, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.CONSUMERS_WRITE)) return true;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         return access.orgAdmin || !access.manageBusinessUnitIds.isEmpty() || !access.manageProjectIds.isEmpty() || !access.manageApplicationIds.isEmpty();
     }
 
     public boolean canViewConsumer(String organizationId, String consumerId, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.CONSUMERS_READ)) return true;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         if (access.orgAdmin || canManageConsumerCatalog(organizationId, actor)) return true;
         Set<String> visibleApps = access.allVisibleApplications();
@@ -98,6 +109,12 @@ public class AccessControlService {
         if (!effectiveAccess(organizationId, actor).orgAdmin) throw forbidden();
     }
 
+    public void requireOrgAdmin(String organizationId, ActorResolver.Actor actor, String requiredServiceScope) {
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, requiredServiceScope)) {
+            requireOrgAdmin(organizationId, actor);
+        }
+    }
+
     public void requireBusinessUnitView(String organizationId, String id, ActorResolver.Actor actor) {
         if (!canViewBusinessUnit(organizationId, id, actor)) throw forbidden();
     }
@@ -106,12 +123,32 @@ public class AccessControlService {
         if (!canManageBusinessUnit(organizationId, id, actor)) throw forbidden();
     }
 
+    public void requireBusinessUnitManage(
+            String organizationId,
+            String id,
+            ActorResolver.Actor actor,
+            String requiredServiceScope) {
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, requiredServiceScope)) {
+            requireBusinessUnitManage(organizationId, id, actor);
+        }
+    }
+
     public void requireProjectView(String organizationId, String id, ActorResolver.Actor actor) {
         if (!canViewProject(organizationId, id, actor)) throw forbidden();
     }
 
     public void requireProjectManage(String organizationId, String id, ActorResolver.Actor actor) {
         if (!canManageProject(organizationId, id, actor)) throw forbidden();
+    }
+
+    public void requireProjectManage(
+            String organizationId,
+            String id,
+            ActorResolver.Actor actor,
+            String requiredServiceScope) {
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, requiredServiceScope)) {
+            requireProjectManage(organizationId, id, actor);
+        }
     }
 
     public void requireApplicationView(String organizationId, String id, ActorResolver.Actor actor) {
@@ -131,24 +168,28 @@ public class AccessControlService {
     }
 
     public List<BusinessUnit> filterBusinessUnits(String organizationId, List<BusinessUnit> units, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.BUSINESS_UNITS_READ)) return units;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         if (access.orgAdmin) return units;
         return units.stream().filter(unit -> access.viewBusinessUnitIds.contains(unit.getId()) || access.manageBusinessUnitIds.contains(unit.getId())).toList();
     }
 
     public List<OnboardingProject> filterProjects(String organizationId, List<OnboardingProject> projects, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.PROJECTS_READ)) return projects;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         if (access.orgAdmin) return projects;
         return projects.stream().filter(project -> access.viewProjectIds.contains(project.getId()) || access.manageProjectIds.contains(project.getId())).toList();
     }
 
     public List<OnboardingApplication> filterApplications(String organizationId, List<OnboardingApplication> applications, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.APPLICATIONS_READ)) return applications;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         if (access.orgAdmin) return applications;
         return applications.stream().filter(app -> access.viewApplicationIds.contains(app.getId()) || access.manageApplicationIds.contains(app.getId())).toList();
     }
 
     public List<Consumer> filterConsumers(String organizationId, List<Consumer> consumers, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.CONSUMERS_READ)) return consumers;
         EffectiveAccess access = effectiveAccess(organizationId, actor);
         if (access.orgAdmin || !access.manageBusinessUnitIds.isEmpty() || !access.manageProjectIds.isEmpty() || !access.manageApplicationIds.isEmpty()) return consumers;
         Set<String> visibleApps = access.allVisibleApplications();

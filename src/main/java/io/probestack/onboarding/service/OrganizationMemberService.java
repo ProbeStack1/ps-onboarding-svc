@@ -20,12 +20,15 @@ import java.util.stream.Collectors;
 public class OrganizationMemberService {
     private final OrganizationMemberClient memberClient;
     private final MemberAccessResolver accessResolver;
+    private final ServiceTokenAuthorizer serviceTokenAuthorizer;
 
     public OrganizationMemberService(
             OrganizationMemberClient memberClient,
-            MemberAccessResolver accessResolver) {
+            MemberAccessResolver accessResolver,
+            ServiceTokenAuthorizer serviceTokenAuthorizer) {
         this.memberClient = memberClient;
         this.accessResolver = accessResolver;
+        this.serviceTokenAuthorizer = serviceTokenAuthorizer;
     }
 
     public PagedResult<OrganizationMemberResponse> list(
@@ -74,6 +77,7 @@ public class OrganizationMemberService {
             MemberAccessResolver.ResolutionContext context,
             String organizationId,
             ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.MEMBERS_READ)) return;
         MemberAccessResolver.MemberIdentity identity = new MemberAccessResolver.MemberIdentity(
                 StringUtils.hasText(actor.userId()) ? actor.userId() : actor.email(),
                 organizationId,

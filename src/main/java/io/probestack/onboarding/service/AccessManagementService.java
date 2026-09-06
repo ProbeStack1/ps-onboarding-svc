@@ -26,6 +26,7 @@ public class AccessManagementService {
     private final TeamInvitationRepository teamInvitationRepository;
     private final TeamApplicationGrantRepository teamGrantRepository;
     private final AuditService auditService;
+    private final ServiceTokenAuthorizer serviceTokenAuthorizer;
 
     public AccessManagementService(AccessControlService accessControlService,
                                    AccessAssignmentRepository assignmentRepository,
@@ -34,7 +35,8 @@ public class AccessManagementService {
                                    AccessTeamRepository teamRepository,
                                    TeamInvitationRepository teamInvitationRepository,
                                    TeamApplicationGrantRepository teamGrantRepository,
-                                   AuditService auditService) {
+                                   AuditService auditService,
+                                   ServiceTokenAuthorizer serviceTokenAuthorizer) {
         this.accessControlService = accessControlService;
         this.assignmentRepository = assignmentRepository;
         this.applicationRepository = applicationRepository;
@@ -43,6 +45,7 @@ public class AccessManagementService {
         this.teamInvitationRepository = teamInvitationRepository;
         this.teamGrantRepository = teamGrantRepository;
         this.auditService = auditService;
+        this.serviceTokenAuthorizer = serviceTokenAuthorizer;
     }
 
     public EffectiveAccessResponse effectiveAccess(String organizationId, ActorResolver.Actor actor) {
@@ -62,13 +65,17 @@ public class AccessManagementService {
     }
 
     public List<AccessAssignmentResponse> assignments(String organizationId, ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.ASSIGNMENTS_READ)) {
+            accessControlService.requireOrgAdmin(organizationId, actor);
+        }
         return assignmentRepository.findByOrganizationIdOrderByCreatedAtDesc(organizationId).stream().map(this::toAssignmentResponse).toList();
     }
 
     public ApplicationInvitationResponse inviteApplicationUser(String organizationId, String applicationId, ApplicationInvitationCreateRequest request, ActorResolver.Actor actor) {
         OnboardingApplication app = findApplication(organizationId, applicationId);
-        accessControlService.requireApplicationManage(organizationId, applicationId, actor);
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.ASSIGNMENTS_WRITE)) {
+            accessControlService.requireApplicationManage(organizationId, applicationId, actor);
+        }
         ApplicationInvitation invitation = ApplicationInvitation.builder()
                 .organizationId(organizationId)
                 .applicationId(applicationId)
@@ -87,6 +94,11 @@ public class AccessManagementService {
     }
 
     public List<ApplicationInvitationResponse> invitations(String organizationId, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.ASSIGNMENTS_READ)) {
+            return invitationRepository.findByOrganizationIdOrderByCreatedAtDesc(organizationId).stream()
+                    .map(invitation -> toInvitationResponse(invitation, findApplicationOrNull(organizationId, invitation.getApplicationId())))
+                    .toList();
+        }
         var access = accessControlService.effectiveAccess(organizationId, actor);
         return invitationRepository.findByOrganizationIdOrderByCreatedAtDesc(organizationId).stream()
                 .filter(invitation -> access.orgAdmin || access.manageApplicationIds.contains(invitation.getApplicationId()) || actor.email().equalsIgnoreCase(invitation.getInvitedEmail()))
@@ -128,7 +140,9 @@ public class AccessManagementService {
     public ApplicationInvitationResponse revokeInvitation(String organizationId, String id, ActorResolver.Actor actor) {
         ApplicationInvitation invitation = findInvitation(organizationId, id);
         requirePending(invitation.getStatus());
-        if (!isCreator(invitation.getCreatedByEmail(), actor)) {
+        boolean serviceAuthorized = serviceTokenAuthorizer.authorizeIfService(
+                actor, ServiceTokenAuthorizer.ASSIGNMENTS_WRITE);
+        if (!serviceAuthorized && !isCreator(invitation.getCreatedByEmail(), actor)) {
             accessControlService.requireApplicationManage(organizationId, invitation.getApplicationId(), actor);
         }
         invitation.setStatus(InvitationStatus.REVOKED);
@@ -140,12 +154,14 @@ public class AccessManagementService {
     }
 
     public AccessTeamResponse createTeam(String organizationId, AccessTeamCreateRequest request, ActorResolver.Actor actor) {
+        boolean serviceAuthorized = serviceTokenAuthorizer.authorizeIfService(
+                actor, ServiceTokenAuthorizer.TEAMS_WRITE);
         String applicationId = SlugNormalizer.trimToNull(request.getApplicationId());
         OnboardingApplication app = null;
         if (StringUtils.hasText(applicationId)) {
             app = findApplication(organizationId, applicationId);
-            accessControlService.requireApplicationManage(organizationId, applicationId, actor);
-        } else if (!accessControlService.canManageConsumerCatalog(organizationId, actor)) {
+            if (!serviceAuthorized) accessControlService.requireApplicationManage(organizationId, applicationId, actor);
+        } else if (!serviceAuthorized && !accessControlService.canManageConsumerCatalog(organizationId, actor)) {
             accessControlService.requireOrgAdmin(organizationId, actor);
         }
         AccessTeam team = AccessTeam.builder()
@@ -165,6 +181,11 @@ public class AccessManagementService {
     }
 
     public List<AccessTeamResponse> teams(String organizationId, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.TEAMS_READ)) {
+            return teamRepository.findByOrganizationIdAndDeletedAtIsNullOrderByCreatedAtDesc(organizationId).stream()
+                    .map(this::toTeamResponse)
+                    .toList();
+        }
         var access = accessControlService.effectiveAccess(organizationId, actor);
         return teamRepository.findByOrganizationIdAndDeletedAtIsNullOrderByCreatedAtDesc(organizationId).stream()
                 .filter(team -> access.orgAdmin || canManageTeam(access, team, actor.email()) || isAcceptedTeamMember(organizationId, team.getId(), actor.email()))
@@ -174,6 +195,9 @@ public class AccessManagementService {
 
     public AccessTeamResponse team(String organizationId, String id, ActorResolver.Actor actor) {
         AccessTeam team = findTeam(organizationId, id);
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.TEAMS_READ)) {
+            return toTeamResponse(team);
+        }
         var access = accessControlService.effectiveAccess(organizationId, actor);
         if (!access.orgAdmin && !canManageTeam(access, team, actor.email()) && !isAcceptedTeamMember(organizationId, id, actor.email())) {
             throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to this team");
@@ -184,9 +208,11 @@ public class AccessManagementService {
 
     public AccessTeamResponse updateTeam(String organizationId, String id, AccessTeamUpdateRequest request, ActorResolver.Actor actor) {
         AccessTeam team = findTeam(organizationId, id);
-        var access = accessControlService.effectiveAccess(organizationId, actor);
-        if (!access.orgAdmin && !canManageTeam(access, team, actor.email())) {
-            throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.TEAMS_WRITE)) {
+            var access = accessControlService.effectiveAccess(organizationId, actor);
+            if (!access.orgAdmin && !canManageTeam(access, team, actor.email())) {
+                throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
+            }
         }
         java.util.Map<String, Object> before = auditService.toMap(team);
         team.setName(request.getName().trim());
@@ -200,9 +226,11 @@ public class AccessManagementService {
 
     public void deleteTeam(String organizationId, String id, ActorResolver.Actor actor) {
         AccessTeam team = findTeam(organizationId, id);
-        var access = accessControlService.effectiveAccess(organizationId, actor);
-        if (!access.orgAdmin && !canManageTeam(access, team, actor.email())) {
-            throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.TEAMS_WRITE)) {
+            var access = accessControlService.effectiveAccess(organizationId, actor);
+            if (!access.orgAdmin && !canManageTeam(access, team, actor.email())) {
+                throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
+            }
         }
         java.util.Map<String, Object> before = auditService.toMap(team);
         team.setDeletedAt(Instant.now());
@@ -216,9 +244,11 @@ public class AccessManagementService {
     }
     public TeamInvitationResponse inviteTeamMember(String organizationId, String teamId, TeamInvitationCreateRequest request, ActorResolver.Actor actor) {
         AccessTeam team = findTeam(organizationId, teamId);
-        var access = accessControlService.effectiveAccess(organizationId, actor);
-        if (!access.orgAdmin && !canManageTeam(access, team, actor.email())) {
-            throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.TEAMS_WRITE)) {
+            var access = accessControlService.effectiveAccess(organizationId, actor);
+            if (!access.orgAdmin && !canManageTeam(access, team, actor.email())) {
+                throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
+            }
         }
         TeamInvitation invitation = TeamInvitation.builder()
                 .organizationId(organizationId)
@@ -236,6 +266,11 @@ public class AccessManagementService {
     }
 
     public List<TeamInvitationResponse> teamInvitations(String organizationId, ActorResolver.Actor actor) {
+        if (serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.TEAMS_READ)) {
+            return teamInvitationRepository.findByOrganizationIdOrderByCreatedAtDesc(organizationId).stream()
+                    .map(invitation -> toTeamInvitationResponse(invitation, findTeamOrNull(organizationId, invitation.getTeamId())))
+                    .toList();
+        }
         var access = accessControlService.effectiveAccess(organizationId, actor);
         return teamInvitationRepository.findByOrganizationIdOrderByCreatedAtDesc(organizationId).stream()
                 .filter(invitation -> {
@@ -281,9 +316,11 @@ public class AccessManagementService {
         TeamInvitation invitation = findTeamInvitation(organizationId, id);
         requirePending(invitation.getStatus());
         AccessTeam team = findTeam(organizationId, invitation.getTeamId());
-        var access = accessControlService.effectiveAccess(organizationId, actor);
-        if (!isCreator(invitation.getCreatedByEmail(), actor) && !access.orgAdmin && !canManageTeam(access, team, actor.email())) {
-            throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.TEAMS_WRITE)) {
+            var access = accessControlService.effectiveAccess(organizationId, actor);
+            if (!isCreator(invitation.getCreatedByEmail(), actor) && !access.orgAdmin && !canManageTeam(access, team, actor.email())) {
+                throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
+            }
         }
         invitation.setStatus(InvitationStatus.REVOKED);
         invitation.setRevokedByEmail(actor.email());
@@ -296,10 +333,12 @@ public class AccessManagementService {
     public AccessTeamResponse grantTeamToApplication(String organizationId, String teamId, String applicationId, ActorResolver.Actor actor) {
         AccessTeam team = findTeam(organizationId, teamId);
         OnboardingApplication app = findApplication(organizationId, applicationId);
-        accessControlService.requireApplicationManage(organizationId, applicationId, actor);
-        var access = accessControlService.effectiveAccess(organizationId, actor);
-        if (!access.orgAdmin && !canManageTeam(access, team, actor.email())) {
-            throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.TEAMS_WRITE)) {
+            accessControlService.requireApplicationManage(organizationId, applicationId, actor);
+            var access = accessControlService.effectiveAccess(organizationId, actor);
+            if (!access.orgAdmin && !canManageTeam(access, team, actor.email())) {
+                throw new io.probestack.onboarding.exception.ForbiddenOperationException("You do not have access to manage this team");
+            }
         }
         if (teamGrantRepository.existsByOrganizationIdAndTeamIdAndApplicationId(organizationId, teamId, applicationId)) {
             throw new DuplicateResourceException("Team already has access to this application");
@@ -317,7 +356,9 @@ public class AccessManagementService {
 
     public AccessTeamResponse revokeTeamFromApplication(String organizationId, String teamId, String applicationId, ActorResolver.Actor actor) {
         AccessTeam team = findTeam(organizationId, teamId);
-        accessControlService.requireApplicationManage(organizationId, applicationId, actor);
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, ServiceTokenAuthorizer.TEAMS_WRITE)) {
+            accessControlService.requireApplicationManage(organizationId, applicationId, actor);
+        }
         teamGrantRepository.deleteByOrganizationIdAndTeamIdAndApplicationId(organizationId, teamId, applicationId);
         auditService.record(organizationId, ResourceType.TEAM_APPLICATION_GRANT, teamId + ":" + applicationId, AuditAction.REVOKE_TEAM_APPLICATION, actor, List.of(), null, java.util.Map.of("teamId", teamId, "applicationId", applicationId));
         return toTeamResponse(team);

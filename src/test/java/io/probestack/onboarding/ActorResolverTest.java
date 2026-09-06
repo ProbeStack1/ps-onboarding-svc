@@ -12,6 +12,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ActorResolverTest {
@@ -63,6 +64,30 @@ class ActorResolverTest {
 
         assertThrows(ForbiddenOperationException.class,
                 () -> actorResolver.requireOrganizationId(spoofedHeaderRequest()));
+    }
+
+    @Test
+    void readsServiceIdentityAndScopesFromValidatedTokenClaims() {
+        authenticate(JWT.create()
+                .withSubject("service:probestack-admin-backend")
+                .withClaim("organization_id", "org-1")
+                .withClaim("client_id", "probestack-admin-backend")
+                .withClaim("principal_type", "service")
+                .withClaim("token_type", "probestack_service_access")
+                .withArrayClaim("scope", new String[]{
+                        "onboarding:members:read",
+                        "onboarding:access:read"
+                })
+                .sign(TEST_ALGORITHM));
+
+        ActorResolver.Actor actor = actorResolver.requireActor(null, new MockHttpServletRequest());
+
+        assertEquals("service:probestack-admin-backend", actor.userId());
+        assertEquals("probestack-admin-backend", actor.clientId());
+        assertEquals("SERVICE", actor.principalType());
+        assertEquals("PROBESTACK_SERVICE_ACCESS", actor.tokenType());
+        assertTrue(actor.presentsServiceCredentials());
+        assertTrue(actor.hasScope("onboarding:access:read"));
     }
 
     private void authenticate(String encodedToken) {

@@ -56,7 +56,7 @@ public class DeveloperService {
     }
 
     public DeveloperResponse create(String organizationId, DeveloperCreateRequest request, ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        accessControlService.requireOrgAdmin(organizationId, actor, ServiceTokenAuthorizer.DEVELOPERS_WRITE);
         String email = normalizeEmail(request.getEmail());
         String username = normalizeUsername(request.getUsername());
         requireUniqueIdentity(organizationId, null, email, username, SlugNormalizer.trimToNull(request.getEmployeeId()));
@@ -115,7 +115,7 @@ public class DeveloperService {
 
     public PagedResult<DeveloperResponse> list(String organizationId, String search, DeveloperAccountStatus status,
                                                 int page, int size, ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        accessControlService.requireOrgAdmin(organizationId, actor, ServiceTokenAuthorizer.DEVELOPERS_READ);
         List<OnboardingDeveloper> source = status == null
                 ? developerRepository.findByOrganizationIdAndDeletedAtIsNullOrderByUpdatedAtDesc(organizationId)
                 : developerRepository.findByOrganizationIdAndAccountStatusAndDeletedAtIsNullOrderByUpdatedAtDesc(organizationId, status);
@@ -127,12 +127,12 @@ public class DeveloperService {
     }
 
     public DeveloperResponse get(String organizationId, String id, ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        accessControlService.requireOrgAdmin(organizationId, actor, ServiceTokenAuthorizer.DEVELOPERS_READ);
         return toResponse(find(organizationId, id));
     }
 
     public DeveloperResponse update(String organizationId, String id, DeveloperUpdateRequest request, ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        accessControlService.requireOrgAdmin(organizationId, actor, ServiceTokenAuthorizer.DEVELOPERS_WRITE);
         OnboardingDeveloper developer = find(organizationId, id);
         Map<String, Object> before = developerFields(developer);
 
@@ -193,7 +193,7 @@ public class DeveloperService {
     }
 
     public void delete(String organizationId, String id, ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        accessControlService.requireOrgAdmin(organizationId, actor, ServiceTokenAuthorizer.DEVELOPERS_WRITE);
         OnboardingDeveloper developer = find(organizationId, id);
         Map<String, Object> before = developerFields(developer);
         developer.setAccountStatus(DeveloperAccountStatus.INACTIVE);
@@ -208,7 +208,7 @@ public class DeveloperService {
     }
 
     public List<AuditLogResponse> history(String organizationId, String id, ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        accessControlService.requireOrgAdmin(organizationId, actor, ServiceTokenAuthorizer.DEVELOPERS_READ);
         find(organizationId, id);
         return auditService.history(organizationId, ResourceType.DEVELOPER, id);
     }

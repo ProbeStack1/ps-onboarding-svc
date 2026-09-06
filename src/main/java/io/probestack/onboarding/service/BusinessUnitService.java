@@ -59,7 +59,7 @@ public class BusinessUnitService {
     }
 
     public BusinessUnitResponse create(String organizationId, BusinessUnitCreateRequest request, ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        accessControlService.requireOrgAdmin(organizationId, actor, ServiceTokenAuthorizer.BUSINESS_UNITS_WRITE);
         String code = SlugNormalizer.normalizeCode(request.getCode());
         if (businessUnitRepository.existsByOrganizationIdAndCode(organizationId, code)) {
             throw new DuplicateResourceException("Business unit code already exists for this organization: " + code);

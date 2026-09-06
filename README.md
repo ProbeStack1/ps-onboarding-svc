@@ -31,6 +31,11 @@ Service clients can alternatively send the standard bearer header:
 Authorization: Bearer <context-token>
 ```
 
+Admin-backend service calls may use a short-lived RS256 service token through the same header.
+The token must contain `token_type=probestack_service_access`, a `principal_type` of `SERVICE`
+or `USER_DELEGATION`, a configured `client_id`, `organization_id`, and the scope required by the
+admin endpoint. Human context tokens continue to use the existing organization-role RBAC path.
+
 The token is validated by `forge-auth-lib` using:
 
 - Issuer: `https://auth.probestack.io`
@@ -46,6 +51,38 @@ Tenant and actor identity are taken only from validated token claims:
 - Role: `role`
 
 Legacy `X-Organization-Id` and `X-User-*` headers, and actor fields in request bodies, are not trusted for identity.
+
+Service-token policy can be configured with:
+
+```text
+ONBOARDING_SERVICE_AUTH_ENABLED=true
+ONBOARDING_SERVICE_AUTH_TRUSTED_CLIENTS=probestack-admin-backend
+```
+
+Admin endpoint service scopes are:
+
+```text
+onboarding:members:read
+onboarding:access:read
+onboarding:bootstrap:read
+onboarding:assignments:read
+onboarding:assignments:write
+onboarding:business-units:read
+onboarding:business-units:write
+onboarding:projects:read
+onboarding:projects:write
+onboarding:applications:read
+onboarding:applications:write
+onboarding:consumers:read
+onboarding:consumers:write
+onboarding:developers:read
+onboarding:developers:write
+onboarding:teams:read
+onboarding:teams:write
+```
+
+See [Admin panel service-to-service authentication](docs/admin-panel-service-auth.md) for the
+token acquisition and request flow.
 
 ## Main APIs
 
@@ -89,11 +126,24 @@ PATCH  /consumers/{id}
 DELETE /consumers/{id}
 GET    /consumers/{id}/history
 
+GET    /developers
+POST   /developers
+GET    /developers/{id}
+PATCH  /developers/{id}
+DELETE /developers/{id}
+
+GET    /access/teams
+POST   /access/teams
+GET    /access/teams/{id}
+PATCH  /access/teams/{id}
+DELETE /access/teams/{id}
+
 GET    /organization-members?status=ACTIVE&page=0&size=20
 GET    /organization-members/{principalId}/access
 
 GET    /role-assignments
 POST   /role-assignments
+GET    /role-assignments/{id}
 PATCH  /role-assignments/{id}
 DELETE /role-assignments/{id}
 

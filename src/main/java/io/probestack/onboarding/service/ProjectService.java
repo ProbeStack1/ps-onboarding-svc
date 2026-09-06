@@ -58,7 +58,8 @@ public class ProjectService {
 
     public ProjectResponse create(String organizationId, ProjectCreateRequest request, ActorResolver.Actor actor) {
         BusinessUnit businessUnit = businessUnitService.find(organizationId, request.getBusinessUnitId());
-        accessControlService.requireBusinessUnitManage(organizationId, businessUnit.getId(), actor);
+        accessControlService.requireBusinessUnitManage(
+                organizationId, businessUnit.getId(), actor, ServiceTokenAuthorizer.PROJECTS_WRITE);
         requireActiveBusinessUnit(businessUnit);
         String code = SlugNormalizer.normalizeCode(request.getCode());
         if (projectRepository.existsByOrganizationIdAndBusinessUnitIdAndCode(organizationId, businessUnit.getId(), code)) {
@@ -144,7 +145,8 @@ public class ProjectService {
         String originalBusinessUnitId = project.getBusinessUnitId();
         if (StringUtils.hasText(request.getBusinessUnitId()) && !request.getBusinessUnitId().equals(originalBusinessUnitId)) {
             BusinessUnit businessUnit = businessUnitService.find(organizationId, request.getBusinessUnitId());
-            accessControlService.requireBusinessUnitManage(organizationId, businessUnit.getId(), actor);
+            accessControlService.requireBusinessUnitManage(
+                    organizationId, businessUnit.getId(), actor, ServiceTokenAuthorizer.PROJECTS_WRITE);
             requireActiveBusinessUnit(businessUnit);
             project.setBusinessUnitId(businessUnit.getId());
         }

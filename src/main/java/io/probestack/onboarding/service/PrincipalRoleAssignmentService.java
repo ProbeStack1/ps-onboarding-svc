@@ -24,20 +24,23 @@ public class PrincipalRoleAssignmentService {
     private final AccessControlService accessControlService;
     private final AuditService auditService;
     private final OrganizationMemberClient memberClient;
+    private final ServiceTokenAuthorizer serviceTokenAuthorizer;
 
     public PrincipalRoleAssignmentService(
             PrincipalRoleAssignmentRepository repository,
             AccessControlService accessControlService,
             AuditService auditService,
-            OrganizationMemberClient memberClient) {
+            OrganizationMemberClient memberClient,
+            ServiceTokenAuthorizer serviceTokenAuthorizer) {
         this.repository = repository;
         this.accessControlService = accessControlService;
         this.auditService = auditService;
         this.memberClient = memberClient;
+        this.serviceTokenAuthorizer = serviceTokenAuthorizer;
     }
 
     public List<MemberRoleAssignmentResponse> list(String organizationId, ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        requireAdmin(organizationId, actor, ServiceTokenAuthorizer.ASSIGNMENTS_READ);
         return repository.findByOrganizationIdOrderByCreatedAtDesc(organizationId).stream()
                 .map(this::toResponse)
                 .toList();
@@ -48,7 +51,7 @@ public class PrincipalRoleAssignmentService {
             RoleAssignmentCreateRequest request,
             String authorization,
             ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        requireAdmin(organizationId, actor, ServiceTokenAuthorizer.ASSIGNMENTS_WRITE);
         validateDates(request.getValidFrom(), request.getValidTo());
         String scopeType = normalizeCode(request.getScopeType());
         String scopeId = required(request.getScopeId(), "Scope id is required");
@@ -89,12 +92,20 @@ public class PrincipalRoleAssignmentService {
         return toResponse(saved);
     }
 
+    public MemberRoleAssignmentResponse get(
+            String organizationId,
+            String id,
+            ActorResolver.Actor actor) {
+        requireAdmin(organizationId, actor, ServiceTokenAuthorizer.ASSIGNMENTS_READ);
+        return toResponse(find(organizationId, id));
+    }
+
     public MemberRoleAssignmentResponse update(
             String organizationId,
             String id,
             RoleAssignmentUpdateRequest request,
             ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        requireAdmin(organizationId, actor, ServiceTokenAuthorizer.ASSIGNMENTS_WRITE);
         PrincipalRoleAssignment assignment = find(organizationId, id);
         PrincipalRoleAssignment before = copy(assignment);
         Instant validFrom = request.getValidFrom() == null ? assignment.getValidFrom() : request.getValidFrom();
@@ -112,7 +123,7 @@ public class PrincipalRoleAssignmentService {
     }
 
     public void revoke(String organizationId, String id, ActorResolver.Actor actor) {
-        accessControlService.requireOrgAdmin(organizationId, actor);
+        requireAdmin(organizationId, actor, ServiceTokenAuthorizer.ASSIGNMENTS_WRITE);
         PrincipalRoleAssignment assignment = find(organizationId, id);
         PrincipalRoleAssignment before = copy(assignment);
         assignment.setActive(false);
@@ -129,6 +140,12 @@ public class PrincipalRoleAssignmentService {
     private PrincipalRoleAssignment find(String organizationId, String id) {
         return repository.findByIdAndOrganizationId(id, organizationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Role assignment not found: " + id));
+    }
+
+    private void requireAdmin(String organizationId, ActorResolver.Actor actor, String requiredServiceScope) {
+        if (!serviceTokenAuthorizer.authorizeIfService(actor, requiredServiceScope)) {
+            accessControlService.requireOrgAdmin(organizationId, actor);
+        }
     }
 
     private void validateAccessRole(RoleKind roleKind, String roleCode, String scopeType) {

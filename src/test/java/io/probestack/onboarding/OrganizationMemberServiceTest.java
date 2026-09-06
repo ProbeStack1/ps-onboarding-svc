@@ -10,6 +10,7 @@ import io.probestack.onboarding.model.OnboardingDeveloper;
 import io.probestack.onboarding.model.RoleKind;
 import io.probestack.onboarding.service.MemberAccessResolver;
 import io.probestack.onboarding.service.OrganizationMemberService;
+import io.probestack.onboarding.service.ServiceTokenAuthorizer;
 import io.probestack.onboarding.util.ActorResolver;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +31,8 @@ class OrganizationMemberServiceTest {
     void listsCanonicalActiveMembersAndEnrichesTheirOnboardingRoles() {
         OrganizationMemberClient memberClient = mock(OrganizationMemberClient.class);
         MemberAccessResolver resolver = mock(MemberAccessResolver.class);
-        OrganizationMemberService service = new OrganizationMemberService(memberClient, resolver);
+        OrganizationMemberService service = new OrganizationMemberService(
+                memberClient, resolver, new ServiceTokenAuthorizer(true, "probestack-admin-backend"));
         OnboardingDeveloper profile = OnboardingDeveloper.builder()
                 .id("developer-1").organizationId(ORG).email("member@example.com").role("API_ENGINEER").build();
         MemberAccessResolver.ResolutionContext context = new MemberAccessResolver.ResolutionContext(

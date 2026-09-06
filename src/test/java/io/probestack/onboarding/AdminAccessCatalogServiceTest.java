@@ -12,6 +12,7 @@ import io.probestack.onboarding.exception.ForbiddenOperationException;
 import io.probestack.onboarding.model.*;
 import io.probestack.onboarding.service.AdminAccessCatalogService;
 import io.probestack.onboarding.service.MemberAccessResolver;
+import io.probestack.onboarding.service.ServiceTokenAuthorizer;
 import io.probestack.onboarding.util.ActorResolver;
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +36,7 @@ class AdminAccessCatalogServiceTest {
     void buildsResourceCentricAccessWithInheritedProjectRole() {
         OrganizationMemberClient memberClient = mock(OrganizationMemberClient.class);
         MemberAccessResolver resolver = mock(MemberAccessResolver.class);
-        AdminAccessCatalogService service = new AdminAccessCatalogService(memberClient, resolver);
+        AdminAccessCatalogService service = new AdminAccessCatalogService(memberClient, resolver, serviceAuthorizer());
         MemberAccessResolver.ResolutionContext context = context();
         OrganizationMemberRecord member = member();
         MemberRoleAssignmentResponse projectAdmin = projectAdminAssignment();
@@ -71,7 +72,7 @@ class AdminAccessCatalogServiceTest {
     void returnsFullLoginAccessAndCompactSnakeCaseTokenClaims() throws Exception {
         OrganizationMemberClient memberClient = mock(OrganizationMemberClient.class);
         MemberAccessResolver resolver = mock(MemberAccessResolver.class);
-        AdminAccessCatalogService service = new AdminAccessCatalogService(memberClient, resolver);
+        AdminAccessCatalogService service = new AdminAccessCatalogService(memberClient, resolver, serviceAuthorizer());
         MemberAccessResolver.ResolutionContext context = context();
         OrganizationMemberRecord member = member();
         MemberAccessResolver.Resolution memberResolution = new MemberAccessResolver.Resolution(
@@ -103,7 +104,7 @@ class AdminAccessCatalogServiceTest {
     void rejectsNonAdminCallersBeforeReadingCanonicalMembers() {
         OrganizationMemberClient memberClient = mock(OrganizationMemberClient.class);
         MemberAccessResolver resolver = mock(MemberAccessResolver.class);
-        AdminAccessCatalogService service = new AdminAccessCatalogService(memberClient, resolver);
+        AdminAccessCatalogService service = new AdminAccessCatalogService(memberClient, resolver, serviceAuthorizer());
         MemberAccessResolver.ResolutionContext context = context();
         when(resolver.loadContext(ORG)).thenReturn(context);
         when(resolver.resolve(eq(context), any())).thenReturn(new MemberAccessResolver.Resolution(
@@ -152,5 +153,9 @@ class AdminAccessCatalogServiceTest {
     private MemberAccessResolver.Resolution adminResolution() {
         return new MemberAccessResolver.Resolution(
                 List.of(), true, Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), Set.of());
+    }
+
+    private ServiceTokenAuthorizer serviceAuthorizer() {
+        return new ServiceTokenAuthorizer(true, "probestack-admin-backend");
     }
 }

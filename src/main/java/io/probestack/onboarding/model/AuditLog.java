@@ -35,6 +35,9 @@ public class AuditLog {
     private String actorEmail;
     private String actorName;
     private String actorRole;
+    private String actorPrincipalType;
+    private String actorClientId;
+    private String actorTokenType;
     @Builder.Default
     private List<FieldChange> changedFields = new ArrayList<>();
     private Map<String, Object> snapshotBefore;
