@@ -17,6 +17,8 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.AntPathMatcher;
 
 @Configuration(proxyBeanMethods = false)
@@ -40,6 +42,8 @@ public class AuthenticationSecurityConfig {
             @Override
             protected boolean shouldNotFilter(HttpServletRequest request) {
                 if (HttpMethod.OPTIONS.matches(request.getMethod())) return true;
+                if (SecurityContextHolder.getContext().getAuthentication() != null
+                        && SecurityContextHolder.getContext().getAuthentication().isAuthenticated()) return true;
 
                 String path = pathWithinApplication(request);
                 for (String publicPath : PUBLIC_PATHS) {
@@ -86,6 +90,7 @@ public class AuthenticationSecurityConfig {
             HttpSecurity http,
             CookieBearerTokenFilter cookieBearerTokenFilter,
             ForgeAuthnAuthenticationFilter authenticationFilter,
+            ObjectProvider<ServiceAccessTokenAuthenticationFilter> serviceAccessTokenFilter,
             AuthenticationEntryPoint authenticationEntryPoint,
             AccessDeniedHandler accessDeniedHandler) throws Exception {
         http
@@ -101,6 +106,8 @@ public class AuthenticationSecurityConfig {
                         .anyRequest().authenticated())
                 .addFilterBefore(cookieBearerTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(authenticationFilter, CookieBearerTokenFilter.class);
+        serviceAccessTokenFilter.ifAvailable(filter ->
+                http.addFilterBefore(filter, ForgeAuthnAuthenticationFilter.class));
         return http.build();
     }
 

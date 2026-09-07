@@ -12,8 +12,9 @@ import java.util.stream.Collectors;
 
 /**
  * Authorizes already-authenticated service principals for the admin-only API surface.
- * JWT signature, issuer, audience and lifetime validation remain the responsibility of
- * forge-auth-lib. Human context tokens deliberately fall through to the existing RBAC path.
+ * JWT signature, issuer, audience and lifetime validation are performed by forge-auth-lib or
+ * the dedicated service-token issuer's RSA/JWKS filter. Human context tokens deliberately fall through
+ * to the existing RBAC path.
  */
 @Component
 public class ServiceTokenAuthorizer {

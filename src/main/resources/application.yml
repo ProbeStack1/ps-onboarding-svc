@@ -34,6 +34,14 @@ onboarding:
   service-auth:
     enabled: ${ONBOARDING_SERVICE_AUTH_ENABLED:true}
     trusted-clients: ${ONBOARDING_SERVICE_AUTH_TRUSTED_CLIENTS:probestack-admin-backend}
+  service-token-validation:
+    enabled: ${ONBOARDING_SERVICE_TOKEN_VALIDATION_ENABLED:false}
+    issuer: ${ONBOARDING_SERVICE_TOKEN_ISSUER:https://probestack.io/token-issuer-api}
+    audience: ${ONBOARDING_SERVICE_TOKEN_AUDIENCE:probestack-api}
+    jwks-uri: ${ONBOARDING_SERVICE_TOKEN_JWKS_URI:https://probestack.io/token-issuer-api/api/v1/service-tokens/jwks}
+    jwks-cache-duration-minutes: ${ONBOARDING_SERVICE_TOKEN_JWKS_CACHE_MINUTES:15}
+    connect-timeout-ms: ${ONBOARDING_SERVICE_TOKEN_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${ONBOARDING_SERVICE_TOKEN_READ_TIMEOUT_MS:5000}
   members:
     admin-api:
       base-url: ${ONBOARDING_ADMIN_API_BASE_URL:https://probestack.io/admin-backend}
