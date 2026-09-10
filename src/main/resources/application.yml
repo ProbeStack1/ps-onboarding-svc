@@ -33,9 +33,9 @@ onboarding:
     org-admin-emails: ${ONBOARDING_ORG_ADMIN_EMAILS:}
   service-auth:
     enabled: ${ONBOARDING_SERVICE_AUTH_ENABLED:true}
-    trusted-clients: ${ONBOARDING_SERVICE_AUTH_TRUSTED_CLIENTS:probestack-admin-backend}
+    trusted-clients: ${ONBOARDING_SERVICE_AUTH_TRUSTED_CLIENTS:probestack-admin-backend,fsp-onboarding-svc}
   service-token-validation:
-    enabled: ${ONBOARDING_SERVICE_TOKEN_VALIDATION_ENABLED:false}
+    enabled: ${ONBOARDING_SERVICE_TOKEN_VALIDATION_ENABLED:true}
     issuer: ${ONBOARDING_SERVICE_TOKEN_ISSUER:https://probestack.io/token-issuer-api}
     audience: ${ONBOARDING_SERVICE_TOKEN_AUDIENCE:probestack-api}
     jwks-uri: ${ONBOARDING_SERVICE_TOKEN_JWKS_URI:https://probestack.io/token-issuer-api/api/v1/service-tokens/jwks}
