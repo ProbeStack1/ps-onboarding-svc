@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.forge.security.authn.model.AuthnToken;
 import com.forge.security.authn.validator.AuthnValidator;
 import io.probestack.onboarding.config.AuthenticationSecurityConfig;
+import io.probestack.onboarding.config.ServiceAccessTokenValidationConfiguration;
 import io.probestack.onboarding.controller.BusinessUnitController;
 import io.probestack.onboarding.dto.businessunit.BusinessUnitCreateRequest;
 import io.probestack.onboarding.dto.businessunit.BusinessUnitResponse;
@@ -36,8 +37,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(value = BusinessUnitController.class, properties = "forge.authn.enabled=true")
-@Import({AuthenticationSecurityConfig.class, ActorResolver.class,
+@WebMvcTest(value = BusinessUnitController.class, properties = {
+        "forge.authn.enabled=true",
+        "onboarding.service-token-validation.enabled=true"
+})
+@Import({AuthenticationSecurityConfig.class, ServiceAccessTokenValidationConfiguration.class, ActorResolver.class,
         AuthenticationSecurityIntegrationTest.SecurityErrorHandlerConfig.class})
 class AuthenticationSecurityIntegrationTest {
     private static final String ORGANIZATION_ID = "f52c02e6-d67a-4bc9-8e94-36e9d4b8d38c";

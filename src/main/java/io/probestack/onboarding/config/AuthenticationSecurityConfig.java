@@ -107,7 +107,7 @@ public class AuthenticationSecurityConfig {
                 .addFilterBefore(cookieBearerTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(authenticationFilter, CookieBearerTokenFilter.class);
         serviceAccessTokenFilter.ifAvailable(filter ->
-                http.addFilterBefore(filter, ForgeAuthnAuthenticationFilter.class));
+                http.addFilterBefore(filter, authenticationFilter.getClass()));
         return http.build();
     }
 
